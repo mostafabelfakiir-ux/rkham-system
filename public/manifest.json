@@ -1,0 +1,10 @@
+{
+    "name": "نظام الرخام - Rkham System",
+    "short_name": "Rkham",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#1e3a5f",
+    "theme_color": "#2563eb",
+    "description": "نظام إدارة مخزون الرخام",
+    "icons": []
+}

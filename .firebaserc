@@ -1,0 +1,22 @@
+{
+  "projects": {
+    "default": "stok-manadjment-v1"
+  },
+  "targets": {
+    "stok-manadjment-v1": {
+      "hosting": {
+        "main": [
+          "rkhaam"
+        ]
+      }
+    },
+    "facturapro-fa220": {
+      "hosting": {
+        "main": [
+          "rkhaam-v1"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}

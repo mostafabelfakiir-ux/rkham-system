@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام الرخام - Rkham System</title>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="manifest" href="manifest.json">
+</head>
+<body>
+    <!-- LOGIN SCREEN -->
+    <div id="login-screen" class="login-container">
+        <div class="login-card">
+            <div class="login-icon-wrap">
+                <i class="fas fa-layer-group"></i>
+            </div>
+            <form id="login-form" onsubmit="handleLogin(event)">
+                <div class="login-input-wrap">
+                    <i class="fas fa-user login-input-icon"></i>
+                    <input type="text" id="login-user" placeholder="user" required>
+                </div>
+                <div class="login-input-wrap">
+                    <i class="fas fa-lock login-input-icon"></i>
+                    <input type="password" id="login-pass" placeholder="••••••••" required>
+                </div>
+                <button type="submit" class="login-btn-submit">
+                    <i class="fas fa-sign-in-alt"></i>
+                </button>
+            </form>
+            <div class="login-divider"></div>
+            <button class="login-btn-google" onclick="loginWithGoogle()">
+                <i class="fas fa-user-plus"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- APP INTERFACE -->
+    <div id="app-interface" style="display:none;">
+        <!-- NAVBAR -->
+        <nav class="navbar">
+            <div class="navbar-brand">
+                <i class="fas fa-layer-group"></i>
+                <span>نظام الرخام</span>
+            </div>
+            <div class="navbar-links">
+                <button class="nav-btn active" onclick="switchTab('journal')" id="tab-journal">
+                    <i class="fas fa-list-alt"></i> <span>السجل</span>
+                </button>
+                <button class="nav-btn" onclick="switchTab('home')" id="tab-home">
+                    <i class="fas fa-home"></i> <span>الرئيسية</span>
+                </button>
+                <button class="nav-btn" onclick="switchTab('bl')" id="tab-bl">
+                    <i class="fas fa-file-invoice"></i> <span>الفواتير</span>
+                </button>
+                <button class="nav-btn" onclick="switchTab('clients')" id="tab-clients">
+                    <i class="fas fa-users"></i> <span>العملاء</span>
+                </button>
+                <button class="nav-btn" onclick="switchTab('staff')" id="tab-staff">
+                    <i class="fas fa-hard-hat"></i> <span>الخدامة</span>
+                </button>
+                <button class="nav-btn" onclick="switchTab('settings')" id="tab-settings">
+                    <i class="fas fa-cog"></i> <span>الإعدادات</span>
+                </button>
+                <button class="nav-btn nav-btn-logout" onclick="handleLogout()">
+                    <i class="fas fa-sign-out-alt"></i>
+                </button>
+            </div>
+        </nav>
+
+        <!-- JOURNAL TAB -->
+        <div id="tab-content-journal" class="tab-content active">
+            <div class="section-header">
+                <h2 data-fr="Journal des ventes" data-ar="سجل المبيعات">سجل المبيعات</h2>
+                <div class="header-actions">
+                    <button class="btn btn-success btn-sm" onclick="openJournalModal()">
+                        <i class="fas fa-plus"></i> <span data-fr="Entrée directe" data-ar="إضافة مباشرة">إضافة مباشرة</span>
+                    </button>
+                    <button class="btn btn-outline btn-sm" onclick="exportJournal()">
+                        <i class="fas fa-file-export"></i> <span data-fr="Exporter" data-ar="تصدير">تصدير</span>
+                    </button>
+                </div>
+            </div>
+            <div class="table-excel-container">
+                <table class="table-excel">
+                    <thead>
+                        <tr>
+                            <th class="col-type">النوع</th>
+                            <th class="col-meters">الأمتار</th>
+                            <th class="col-price">الثمن</th>
+                            <th class="col-total">المجموع</th>
+                            <th class="col-payment">الدفع</th>
+                            <th class="col-date">التاريخ</th>
+                            <th class="col-actions">إجراءات</th>
+                        </tr>
+                    </thead>
+                    <tbody id="journal-body"></tbody>
+                    <tfoot>
+                        <tr class="total-row">
+                            <td class="col-type"></td>
+                            <td id="journal-total-meters" class="col-meters total-value"></td>
+                            <td class="total-label">المجموع</td>
+                            <td id="journal-total-amount" class="total-value"><span dir="ltr" style="display:inline-block;">0.00</span></td>
+                            <td class="col-payment"></td>
+                            <td id="journal-total-date" class="total-date">-</td>
+                            <td class="col-actions"></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+
+        <!-- HOME TAB -->
+        <div id="tab-content-home" class="tab-content">
+            <div class="dashboard-grid">
+                <div class="card stat-card">
+                    <div class="stat-icon"><i class="fas fa-file-invoice"></i></div>
+                    <div class="stat-info">
+                        <h3 id="stat-bl-count">0</h3>
+                        <p data-fr="Bons de Livraison" data-ar="عدد الوصولات">عدد الوصولات</p>
+                    </div>
+                </div>
+                <div class="card stat-card">
+                    <div class="stat-icon success"><i class="fas fa-coins"></i></div>
+                    <div class="stat-info">
+                        <h3 id="stat-total-revenue">0 DH</h3>
+                        <p data-fr="Revenu total" data-ar="المداخيل الإجمالية">المداخيل الإجمالية</p>
+                    </div>
+                </div>
+                <div class="card stat-card">
+                    <div class="stat-icon warning"><i class="fas fa-ruler-combined"></i></div>
+                    <div class="stat-info">
+                        <h3 id="stat-total-m2">0 m²</h3>
+                        <p data-fr="Surface totale" data-ar="إجمالي الأمتار">إجمالي الأمتار</p>
+                    </div>
+                </div>
+                <div class="card stat-card">
+                    <div class="stat-icon danger"><i class="fas fa-users"></i></div>
+                    <div class="stat-info">
+                        <h3 id="stat-client-count">0</h3>
+                        <p>عدد العملاء</p>
+                    </div>
+                </div>
+                <div class="card stat-card">
+                    <div class="stat-icon" style="background:rgba(239,68,68,0.1);color:#ef4444;"><i class="fas fa-hand-holding-usd"></i></div>
+                    <div class="stat-info">
+                        <h3 id="stat-total-debt">0 DH</h3>
+                        <p>الديون الباقية</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- BL TAB -->
+        <div id="tab-content-bl" class="tab-content">
+            <div class="section-header">
+                <h2 data-fr="Bons de Livraison" data-ar="أوراق التسليم">أوراق التسليم</h2>
+                <button class="btn btn-primary btn-sm" onclick="openNewBL()">
+                    <i class="fas fa-plus"></i> <span data-fr="Nouveau BL" data-ar="وصل جديد">وصل جديد</span>
+                </button>
+            </div>
+            <div id="bl-list" class="bl-grid"></div>
+        </div>
+
+        <!-- CLIENTS TAB -->
+        <div id="tab-content-clients" class="tab-content">
+            <div class="section-header">
+                <h2>العملاء</h2>
+                <button class="btn btn-primary btn-sm" onclick="openNewClient()">
+                    <i class="fas fa-plus"></i> عميل جديد
+                </button>
+            </div>
+            <!-- ديون العملاء -->
+            <div id="clients-debt-summary" class="debt-summary-bar card" style="margin-bottom:16px;display:none;">
+                <div class="debt-item">
+                    <span>إجمالي الفواتير</span>
+                    <strong id="debt-total">0 DH</strong>
+                </div>
+                <div class="debt-item success">
+                    <span>المدفوع</span>
+                    <strong id="debt-paid">0 DH</strong>
+                </div>
+                <div class="debt-item danger">
+                    <span>الباقي</span>
+                    <strong id="debt-remaining">0 DH</strong>
+                </div>
+            </div>
+            <div id="clients-list" class="clients-grid"></div>
+        </div>
+
+        <!-- STAFF TAB -->
+        <div id="tab-content-staff" class="tab-content">
+            <div class="section-header">
+                <h2><i class="fas fa-hard-hat"></i> الخدامة</h2>
+                <button class="btn btn-primary btn-sm" onclick="openStaffModal()">
+                    <i class="fas fa-plus"></i> إضافة خادم
+                </button>
+            </div>
+            <div id="staff-list" class="staff-grid"></div>
+        </div>
+
+        <!-- SETTINGS TAB -->
+        <div id="tab-content-settings" class="tab-content">
+            <div class="section-header">
+                <h2 data-fr="Paramètres" data-ar="الإعدادات">الإعدادات</h2>
+            </div>
+            <div class="settings-form card">
+                <div class="form-group">
+                    <label data-fr="Langue" data-ar="اللغة">اللغة</label>
+                    <select id="setting-lang" onchange="changeLang(this.value)">
+                        <option value="ar">العربية</option>
+                        <option value="fr">Français</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label data-fr="Devise" data-ar="العملة">العملة</label>
+                    <select id="setting-currency" onchange="changeCurrency(this.value)">
+                        <option value="MAD">MAD (DH)</option>
+                        <option value="EUR">EUR (€)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label data-fr="Nom de l'entreprise" data-ar="اسم المؤسسة">اسم المؤسسة</label>
+                    <input type="text" id="setting-company" placeholder="اسم المؤسسة">
+                </div>
+                <div class="form-group">
+                    <label data-fr="Téléphone" data-ar="الهاتف">الهاتف</label>
+                    <input type="text" id="setting-phone" placeholder="رقم الهاتف">
+                </div>
+                <button class="btn btn-primary" onclick="saveSettings()">
+                    <i class="fas fa-save"></i> <span data-fr="Enregistrer" data-ar="حفظ">حفظ</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- JOURNAL MODAL -->
+        <div id="journal-modal" class="modal" style="display:none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 data-fr="Nouvelle entrée" data-ar="إضافة مبيعة جديدة">إضافة مبيعة جديدة</h3>
+                    <button class="modal-close" onclick="closeJournalModal()">&times;</button>
+                </div>
+                <form id="journal-form" onsubmit="saveQuickEntry(event)">
+                    <div class="form-group">
+                        <label data-fr="Type de marbre" data-ar="نوع الرخام">نوع الرخام</label>
+                        <input type="text" id="entry-type" required placeholder="مثال: galax, emperador...">
+                    </div>
+                    <div class="form-group">
+                        <label data-fr="Surface (m²)" data-ar="المساحة (م²)">المساحة (م²)</label>
+                        <input type="number" id="entry-meters" step="0.01" required placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label data-fr="Prix unitaire" data-ar="ثمن المتر">ثمن المتر</label>
+                        <input type="number" id="entry-price" step="0.01" required placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label>المجموع</label>
+                        <input type="text" id="entry-total" readonly class="input-readonly">
+                    </div>
+                    <div class="form-group">
+                        <label>طريقة الدفع</label>
+                        <div class="payment-toggle">
+                            <button type="button" class="payment-btn active" id="pay-cash" onclick="selectPayment('espece')">
+                                <i class="fas fa-money-bill-wave"></i> Espèce
+                            </button>
+                            <button type="button" class="payment-btn" id="pay-check" onclick="selectPayment('cheque')">
+                                <i class="fas fa-money-check"></i> Chèque
+                            </button>
+                        </div>
+                        <input type="hidden" id="entry-payment" value="espece">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">
+                        <i class="fas fa-save"></i> حفظ
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- CLIENT MODAL -->
+        <div id="client-modal" class="modal" style="display:none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 data-fr="Nouveau client" data-ar="عميل جديد">عميل جديد</h3>
+                    <button class="modal-close" onclick="closeClientModal()">&times;</button>
+                </div>
+                <form id="client-form" onsubmit="saveClient(event)">
+                    <div class="form-group">
+                        <label data-fr="Nom" data-ar="الاسم">الاسم</label>
+                        <input type="text" id="client-name" required>
+                    </div>
+                    <div class="form-group">
+                        <label data-fr="Téléphone" data-ar="الهاتف">الهاتف</label>
+                        <input type="text" id="client-phone">
+                    </div>
+                    <div class="form-group">
+                        <label data-fr="Adresse" data-ar="العنوان">العنوان</label>
+                        <input type="text" id="client-address">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">
+                        <i class="fas fa-save"></i> <span data-fr="Enregistrer" data-ar="حفظ">حفظ</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- BL MODAL -->
+        <div id="bl-modal" class="modal" style="display:none;">
+            <div class="modal-content modal-lg">
+                <div class="modal-header">
+                    <h3 data-fr="Bon de Livraison" data-ar="وصل التسليم">وصل التسليم</h3>
+                    <button class="modal-close" onclick="closeBLModal()">&times;</button>
+                </div>
+                <form id="bl-form" onsubmit="saveBL(event)">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label data-fr="Client" data-ar="العميل">العميل</label>
+                            <select id="bl-client"></select>
+                        </div>
+                        <div class="form-group">
+                            <label data-fr="Date" data-ar="التاريخ">التاريخ</label>
+                            <input type="date" id="bl-date">
+                        </div>
+                    </div>
+                    <div id="bl-products">
+                        <div class="bl-product-row">
+                            <input type="text" placeholder="نوع الرخام" class="bl-prod-name">
+                            <input type="number" step="0.01" placeholder="المساحة" class="bl-prod-meters">
+                            <input type="number" step="0.01" placeholder="الثمن" class="bl-prod-price">
+                            <span class="bl-prod-total">0.00</span>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-outline btn-sm" onclick="addBLProductRow()">
+                        <i class="fas fa-plus"></i> إضافة منتج
+                    </button>
+                    <div class="bl-summary">
+                        <span data-fr="Total" data-ar="المجموع الكلي">المجموع الكلي:</span>
+                        <strong id="bl-grand-total">0.00</strong>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">
+                        <i class="fas fa-save"></i> حفظ الوصل
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- STAFF MODAL -->
+        <div id="staff-modal" class="modal" style="display:none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>إضافة خادم</h3>
+                    <button class="modal-close" onclick="closeStaffModal()">&times;</button>
+                </div>
+                <form id="staff-form" onsubmit="saveStaff(event)">
+                    <div class="form-group">
+                        <label>الاسم</label>
+                        <input type="text" id="staff-name" required placeholder="اسم الخادم">
+                    </div>
+                    <div class="form-group">
+                        <label>المبلغ المدفوع / السلفة</label>
+                        <input type="number" id="staff-amount" step="0.01" required placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label>ملاحظة</label>
+                        <input type="text" id="staff-note" placeholder="اختياري">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">
+                        <i class="fas fa-save"></i> حفظ
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- PAYMENT MODAL (تسجيل دفع لعميل) -->
+        <div id="payment-modal" class="modal" style="display:none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>تسجيل دفعة</h3>
+                    <button class="modal-close" onclick="closePaymentModal()">&times;</button>
+                </div>
+                <form id="payment-form" onsubmit="savePayment(event)">
+                    <input type="hidden" id="payment-client-id">
+                    <div class="form-group">
+                        <label>المبلغ المدفوع</label>
+                        <input type="number" id="payment-amount" step="0.01" required placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label>طريقة الدفع</label>
+                        <div class="payment-toggle">
+                            <button type="button" class="payment-btn active" id="pmnt-cash" onclick="selectPaymentModal('espece')">
+                                <i class="fas fa-money-bill-wave"></i> Espèce
+                            </button>
+                            <button type="button" class="payment-btn" id="pmnt-check" onclick="selectPaymentModal('cheque')">
+                                <i class="fas fa-money-check"></i> Chèque
+                            </button>
+                        </div>
+                        <input type="hidden" id="payment-method" value="espece">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">
+                        <i class="fas fa-save"></i> تسجيل الدفعة
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- FLOATING WHATSAPP -->
+        <a href="https://wa.me/" target="_blank" class="whatsapp-float">
+            <i class="fab fa-whatsapp"></i>
+        </a>
+    </div>
+
+    <!-- FIREBASE SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+    <script src="js/firebase-config.js"></script>
+    <script src="js/app.js?v=10"></script>
+</body>
+</html>
