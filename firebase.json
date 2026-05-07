@@ -1,6 +1,6 @@
 {
   "hosting": {
-    "target": "main",
+    "site": "rkhaam",
     "public": "public",
     "ignore": [
       "firebase.json",

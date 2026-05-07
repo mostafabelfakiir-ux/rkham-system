@@ -60,6 +60,12 @@
                 <button class="nav-btn" onclick="switchTab('staff')" id="tab-staff">
                     <i class="fas fa-hard-hat"></i> <span>الخدامة</span>
                 </button>
+                <button class="nav-btn" onclick="switchTab('masarif')" id="tab-masarif">
+                    <i class="fas fa-money-bill-wave"></i> <span>المصاريف</span>
+                </button>
+                <button class="nav-btn" onclick="switchTab('fournisseur')" id="tab-fournisseur">
+                    <i class="fas fa-truck"></i> <span>الفورنيسور</span>
+                </button>
                 <button class="nav-btn" onclick="switchTab('settings')" id="tab-settings">
                     <i class="fas fa-cog"></i> <span>الإعدادات</span>
                 </button>
@@ -149,6 +155,34 @@
                         <p>الديون الباقية</p>
                     </div>
                 </div>
+                <div class="card stat-card">
+                    <div class="stat-icon" style="background:rgba(245,158,11,0.1);color:#f59e0b;"><i class="fas fa-money-bill-wave"></i></div>
+                    <div class="stat-info">
+                        <h3 id="stat-total-masarif">0 DH</h3>
+                        <p>إجمالي المصاريف</p>
+                    </div>
+                </div>
+                <div class="card stat-card">
+                    <div class="stat-icon" style="background:rgba(16,185,129,0.15);color:#059669;"><i class="fas fa-boxes"></i></div>
+                    <div class="stat-info">
+                        <h3 id="stat-live-stock">0 m²</h3>
+                        <p>المخزون الحالي</p>
+                    </div>
+                </div>
+                <div class="card stat-card">
+                    <div class="stat-icon" style="background:rgba(239,68,68,0.12);color:#dc2626;"><i class="fas fa-file-invoice-dollar"></i></div>
+                    <div class="stat-info">
+                        <h3 id="stat-total-charges">0 DH</h3>
+                        <p>إجمالي التكاليف</p>
+                    </div>
+                </div>
+                <div class="card stat-card stat-card-profit">
+                    <div class="stat-icon" style="background:rgba(16,185,129,0.15);color:#059669;"><i class="fas fa-chart-line"></i></div>
+                    <div class="stat-info">
+                        <h3 id="stat-net-profit" style="color:var(--success);">0 DH</h3>
+                        <p>صافي الربح</p>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -198,6 +232,233 @@
                 </button>
             </div>
             <div id="staff-list" class="staff-grid"></div>
+        </div>
+
+        <!-- MASARIF TAB -->
+        <div id="tab-content-masarif" class="tab-content">
+            <div class="section-header">
+                <h2><i class="fas fa-money-bill-wave"></i> المصاريف</h2>
+                <div class="header-actions">
+                    <button class="btn btn-success btn-sm" onclick="openMasarifModal()">
+                        <i class="fas fa-plus"></i> مصروف جديد
+                    </button>
+                    <button class="btn btn-outline btn-sm" onclick="exportMasarif()">
+                        <i class="fas fa-file-export"></i> تصدير
+                    </button>
+                </div>
+            </div>
+            <div class="table-excel-container">
+                <table class="table-excel">
+                    <thead>
+                        <tr>
+                            <th class="col-type">النوع / الوصف</th>
+                            <th class="col-total">المبلغ</th>
+                            <th class="col-payment">الدفع</th>
+                            <th class="col-date">التاريخ</th>
+                            <th class="col-type" style="background:#b2bec3;color:#1a1a2e;">الملاحظة</th>
+                            <th class="col-actions">إجراءات</th>
+                        </tr>
+                    </thead>
+                    <tbody id="masarif-body"></tbody>
+                    <tfoot>
+                        <tr class="total-row">
+                            <td class="total-label">المجموع</td>
+                            <td id="masarif-total" class="total-value"><span dir="ltr" style="display:inline-block;">0.00</span></td>
+                            <td></td>
+                            <td id="masarif-total-date" class="total-date">-</td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+
+        <!-- FOURNISSEUR TAB -->
+        <div id="tab-content-fournisseur" class="tab-content">
+            <div class="section-header">
+                <h2><i class="fas fa-truck"></i> الفورنيسور</h2>
+                <button class="btn btn-primary btn-sm" onclick="openNewFournisseur()">
+                    <i class="fas fa-plus"></i> فورنيسور جديد
+                </button>
+            </div>
+            <div id="fournisseur-debt-summary" class="debt-summary-bar card" style="margin-bottom:16px;display:none;">
+                <div class="debt-item">
+                    <span>إجمالي الشراء</span>
+                    <strong id="fourn-total">0 DH</strong>
+                </div>
+                <div class="debt-item danger">
+                    <span>ما خلصناهمش</span>
+                    <strong id="fourn-remaining">0 DH</strong>
+                </div>
+                <div class="debt-item success">
+                    <span>المدفوع</span>
+                    <strong id="fourn-paid">0 DH</strong>
+                </div>
+            </div>
+            <div id="fournisseur-list" class="clients-grid"></div>
+        </div>
+
+        <!-- MASARIF MODAL -->
+        <div id="masarif-modal" class="modal" style="display:none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>مصروف جديد</h3>
+                    <button class="modal-close" onclick="closeMasarifModal()">&times;</button>
+                </div>
+                <form id="masarif-form" onsubmit="saveMasarif(event)">
+                    <div class="form-group">
+                        <label>النوع / الوصف</label>
+                        <input type="text" id="masarif-type" required placeholder="مثال: كراء، ضوء، ماء...">
+                    </div>
+                    <div class="form-group">
+                        <label>المبلغ</label>
+                        <input type="number" id="masarif-amount" step="0.01" required placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label>طريقة الدفع</label>
+                        <div class="payment-toggle">
+                            <button type="button" class="payment-btn active" id="mas-cash" onclick="selectMasarifPayment('espece')">
+                                <i class="fas fa-money-bill-wave"></i> Espèce
+                            </button>
+                            <button type="button" class="payment-btn" id="mas-check" onclick="selectMasarifPayment('cheque')">
+                                <i class="fas fa-money-check"></i> Chèque
+                            </button>
+                        </div>
+                        <input type="hidden" id="masarif-payment" value="espece">
+                    </div>
+                    <div class="form-group">
+                        <label>ملاحظة (اختياري)</label>
+                        <input type="text" id="masarif-note" placeholder="ملاحظة...">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">
+                        <i class="fas fa-save"></i> حفظ
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- FOURNISSEUR MODAL -->
+        <div id="fournisseur-modal" class="modal" style="display:none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>فورنيسور جديد</h3>
+                    <button class="modal-close" onclick="closeFournisseurModal()">&times;</button>
+                </div>
+                <form id="fournisseur-form" onsubmit="saveFournisseur(event)">
+                    <div class="form-group">
+                        <label>الاسم</label>
+                        <input type="text" id="fourn-name" required placeholder="اسم الفورنيسور">
+                    </div>
+                    <div class="form-group">
+                        <label>الهاتف</label>
+                        <input type="text" id="fourn-phone" placeholder="رقم الهاتف">
+                    </div>
+                    <div class="form-group">
+                        <label>أنواع الرخام</label>
+                        <div id="fourn-marble-types-list">
+                            <div class="fourn-marble-type-row">
+                                <input type="text" class="fourn-marble-type-input" placeholder="مثال: galax, emperador...">
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-outline btn-sm" onclick="addMarbleTypeRow()" style="margin-top:6px;">
+                            <i class="fas fa-plus"></i> إضافة نوع
+                        </button>
+                    </div>
+                    <div class="form-group">
+                        <label>طريقة الدفع المعتادة</label>
+                        <div class="payment-toggle">
+                            <button type="button" class="payment-btn active" id="fourn-pay-cash" onclick="selectFournisseurPayment('espece')">
+                                <i class="fas fa-money-bill-wave"></i> Espèce
+                            </button>
+                            <button type="button" class="payment-btn" id="fourn-pay-check" onclick="selectFournisseurPayment('cheque')">
+                                <i class="fas fa-money-check"></i> Chèque
+                            </button>
+                        </div>
+                        <input type="hidden" id="fourn-payment-default" value="espece">
+                    </div>
+                    <div class="form-group">
+                        <label>ملاحظة</label>
+                        <input type="text" id="fourn-note" placeholder="اختياري">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">
+                        <i class="fas fa-save"></i> إضافة
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- FOURNISSEUR BL MODAL -->
+        <div id="fourn-bl-modal" class="modal" style="display:none;">
+            <div class="modal-content modal-lg">
+                <div class="modal-header">
+                    <h3>فاتورة شراء جديدة</h3>
+                    <button class="modal-close" onclick="closeFournBLModal()">&times;</button>
+                </div>
+                <form id="fourn-bl-form" onsubmit="saveFournBL(event)">
+                    <input type="hidden" id="fourn-bl-fournisseur-id">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>الفورنيسور</label>
+                            <input type="text" id="fourn-bl-fournisseur-name" readonly class="input-readonly">
+                        </div>
+                        <div class="form-group">
+                            <label>التاريخ</label>
+                            <input type="date" id="fourn-bl-date">
+                        </div>
+                    </div>
+                    <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 22px;gap:6px;margin-bottom:4px;font-size:0.75rem;color:var(--text-muted);padding:0 2px;">
+                        <span>النوع</span><span>م²</span><span>الثمن</span><span>المجموع</span><span></span>
+                    </div>
+                    <div id="fourn-bl-products"></div>
+                    <button type="button" class="btn btn-outline btn-sm" onclick="addFournProductRow()" style="margin:8px 0 12px;">
+                        <i class="fas fa-plus"></i> إضافة منتج
+                    </button>
+                    <div class="bl-summary">
+                        <span>المجموع الكلي:</span>
+                        <strong id="fourn-bl-grand-total">0.00</strong>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block" style="margin-top:12px;">
+                        <i class="fas fa-save"></i> حفظ الفاتورة
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- FOURNISSEUR PAYMENT MODAL -->
+        <div id="fourn-payment-modal" class="modal" style="display:none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>تسجيل دفعة للفورنيسور</h3>
+                    <button class="modal-close" onclick="closeFournPaymentModal()">&times;</button>
+                </div>
+                <form id="fourn-payment-form" onsubmit="saveFournPayment(event)">
+                    <input type="hidden" id="fourn-payment-id">
+                    <div class="form-group">
+                        <label>المبلغ المدفوع</label>
+                        <input type="number" id="fourn-payment-amount" step="0.01" required placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label>طريقة الدفع</label>
+                        <div class="payment-toggle">
+                            <button type="button" class="payment-btn active" id="fp-cash" onclick="selectFournPayment('espece')">
+                                <i class="fas fa-money-bill-wave"></i> Espèce
+                            </button>
+                            <button type="button" class="payment-btn" id="fp-check" onclick="selectFournPayment('cheque')">
+                                <i class="fas fa-money-check"></i> Chèque
+                            </button>
+                        </div>
+                        <input type="hidden" id="fourn-payment-method" value="espece">
+                    </div>
+                    <div class="form-group" id="fourn-cheque-row" style="display:none;">
+                        <label>رقم الشيك</label>
+                        <input type="text" id="fourn-cheque-num" placeholder="ex: 012345">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">
+                        <i class="fas fa-save"></i> تسجيل الدفعة
+                    </button>
+                </form>
+            </div>
         </div>
 
         <!-- SETTINGS TAB -->
@@ -414,6 +675,6 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
     <script src="js/firebase-config.js"></script>
-    <script src="js/app.js?v=10"></script>
+    <script src="js/app.js?v=11"></script>
 </body>
 </html>

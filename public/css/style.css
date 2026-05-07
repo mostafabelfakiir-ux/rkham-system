@@ -369,6 +369,62 @@ body {
     font-family: inherit;
 }
 
+/* Fourn product rows */
+.fourn-prod-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr 22px;
+    gap: 6px;
+    margin-bottom: 6px;
+    align-items: center;
+}
+
+.fourn-prod-row input {
+    padding: 7px 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 0.88rem;
+    width: 100%;
+}
+
+.fourn-prod-row .fourn-prod-total {
+    font-weight: 700;
+    font-size: 0.82rem;
+    color: var(--success);
+    text-align: center;
+}
+
+.fourn-marble-type-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+.fourn-marble-type-row input {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 0.9rem;
+}
+
+.btn-remove-row {
+    background: var(--danger);
+    color: white;
+    border: none;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.65rem;
+    flex-shrink: 0;
+}
+.btn-remove-row:hover { opacity: 0.8; }
+
 .bl-summary {
     display: flex;
     justify-content: space-between;
@@ -589,25 +645,64 @@ body {
     box-shadow: 0 4px 10px rgba(37,211,102,0.5);
 }
 
+/* Print buttons */
+.btn-print-a4 {
+    background: #6366f1;
+    color: white;
+    border: none;
+    height: 28px;
+    padding: 0 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    transition: all 0.2s;
+}
+.btn-print-a4:hover { opacity: 0.85; transform: scale(1.05); }
+
+.btn-print-thermal {
+    background: #0ea5e9;
+    color: white;
+    border: none;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    transition: all 0.2s;
+}
+.btn-print-thermal:hover { opacity: 0.85; transform: scale(1.05); }
+
 /* Delete button in table */
 .btn-delete-row {
     background: var(--danger);
     color: white;
     border: none;
-    width: 28px;
-    height: 28px;
+    width: 26px;
+    height: 26px;
     border-radius: 50%;
     cursor: pointer;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     transition: all 0.2s;
-    margin-right: 4px;
+    margin-right: 2px;
+    flex-shrink: 0;
 }
+.btn-delete-row:hover { transform: scale(1.1); }
 
-.btn-delete-row:hover {
-    transform: scale(1.1);
+@media (max-width: 768px) {
+    .btn-delete-row { width: 24px; height: 24px; font-size: 0.65rem; }
+    .btn-print-a4 { height: 24px; font-size: 0.65rem; padding: 0 5px; }
+    .btn-print-thermal { width: 24px; height: 24px; font-size: 0.75rem; }
+    .btn-whatsapp { width: 28px; height: 28px; font-size: 0.85rem; }
 }
 
 /* PAYMENT TOGGLE */
@@ -780,6 +875,32 @@ body {
 
 .client-debt-item strong {
     font-size: 0.88rem;
+}
+
+/* EDIT BL BUTTON */
+.btn-edit-bl {
+    background: #f59e0b;
+    color: white;
+    border: none;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    transition: all 0.2s;
+}
+.btn-edit-bl:hover { opacity: 0.85; transform: scale(1.05); }
+
+/* P&L PROFIT CARD */
+.stat-card-profit {
+    background: linear-gradient(135deg, #ecfdf5, #d1fae5) !important;
+    border: 1.5px solid #6ee7b7 !important;
+}
+.stat-card-profit .stat-info h3 {
+    font-size: 1.6rem;
 }
 
 /* RESPONSIVE */
