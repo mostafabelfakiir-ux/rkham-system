@@ -325,8 +325,8 @@ function openNewBL() {
     document.getElementById('bl-products').innerHTML = `
         <div class="bl-product-row">
             <input type="text" placeholder="نوع الرخام" class="bl-prod-name">
-            <input type="number" step="0.01" placeholder="المساحة" class="bl-prod-meters" oninput="calcBLRow(this)">
-            <input type="number" step="0.01" placeholder="الثمن" class="bl-prod-price" oninput="calcBLRow(this)">
+            <input type="number" step="0.01" placeholder="المساحة" class="bl-prod-meters" oninput="calcBLRow(this)" lang="fr">
+            <input type="number" step="0.01" placeholder="الثمن" class="bl-prod-price" oninput="calcBLRow(this)" lang="fr">
             <span class="bl-prod-total">0.00</span>
         </div>
     `;
@@ -344,8 +344,8 @@ function addBLProductRow() {
     row.className = 'bl-product-row';
     row.innerHTML = `
         <input type="text" placeholder="نوع الرخام" class="bl-prod-name">
-        <input type="number" step="0.01" placeholder="المساحة" class="bl-prod-meters" oninput="calcBLRow(this)">
-        <input type="number" step="0.01" placeholder="الثمن" class="bl-prod-price" oninput="calcBLRow(this)">
+        <input type="number" step="0.01" placeholder="المساحة" class="bl-prod-meters" oninput="calcBLRow(this)" lang="fr">
+        <input type="number" step="0.01" placeholder="الثمن" class="bl-prod-price" oninput="calcBLRow(this)" lang="fr">
         <span class="bl-prod-total">0.00</span>
     `;
     container.appendChild(row);
@@ -461,8 +461,8 @@ function editBL(id) {
         row.className = 'bl-product-row';
         row.innerHTML = `
             <input type="text" placeholder="نوع الرخام" class="bl-prod-name" value="${p.name || ''}">
-            <input type="number" step="0.01" placeholder="المساحة" class="bl-prod-meters" value="${p.total_m2 || ''}" oninput="calcBLRow(this)">
-            <input type="number" step="0.01" placeholder="الثمن" class="bl-prod-price" value="${p.pu || ''}" oninput="calcBLRow(this)">
+            <input type="number" step="0.01" placeholder="المساحة" class="bl-prod-meters" value="${p.total_m2 || ''}" oninput="calcBLRow(this)" lang="fr">
+            <input type="number" step="0.01" placeholder="الثمن" class="bl-prod-price" value="${p.pu || ''}" oninput="calcBLRow(this)" lang="fr">
             <span class="bl-prod-total">${formatNumber((p.total_m2 || 0) * (p.pu || 0))}</span>
         `;
         container.appendChild(row);
@@ -1153,8 +1153,8 @@ function populateFournisseurList() {
 function fournProductRowHTML(removable) {
     return `<div class="fourn-prod-row">
         <input type="text" placeholder="نوع الرخام" class="fourn-prod-name">
-        <input type="number" step="0.01" placeholder="م²" class="fourn-prod-meters" oninput="calcFournRow(this)">
-        <input type="number" step="0.01" placeholder="الثمن" class="fourn-prod-price" oninput="calcFournRow(this)">
+        <input type="number" step="0.01" placeholder="م²" class="fourn-prod-meters" oninput="calcFournRow(this)" lang="fr">
+        <input type="number" step="0.01" placeholder="الثمن" class="fourn-prod-price" oninput="calcFournRow(this)" lang="fr">
         <span class="fourn-prod-total">0.00</span>
         ${removable ? `<button type="button" class="btn-remove-row" onclick="removeFournRow(this)" title="حذف"><i class="fas fa-times"></i></button>` : '<span style="width:22px;display:inline-block;"></span>'}
     </div>`;
