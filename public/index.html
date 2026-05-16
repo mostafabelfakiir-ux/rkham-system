@@ -1,7 +1,8 @@
 <!DOCTYPE html>
-<html lang="ar-MA" dir="rtl">
+<html lang="fr" dir="rtl">
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>نظام الرخام - Rkham System</title>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
@@ -13,26 +14,28 @@
     <!-- LOGIN SCREEN -->
     <div id="login-screen" class="login-container">
         <div class="login-card">
-            <div class="login-icon-wrap">
+            <div class="login-icon-wrap" style="margin-bottom: 16px;">
                 <i class="fas fa-layer-group"></i>
             </div>
+            <h2 class="login-title" id="login-title-text" style="margin-bottom: 24px; color: var(--primary); font-family: 'Tajawal', sans-serif; font-weight: 700; text-align: center; font-size: 1.4rem;">نظام الرخام - Rkham System</h2>
             <form id="login-form" onsubmit="handleLogin(event)">
+                <input type="hidden" id="auth-mode" value="login">
                 <div class="login-input-wrap">
-                    <i class="fas fa-user login-input-icon"></i>
-                    <input type="text" id="login-user" placeholder="user" required>
+                    <i class="fas fa-envelope login-input-icon"></i>
+                    <input type="email" id="login-email" placeholder="البريد الإلكتروني / Email" required style="text-align: right;">
                 </div>
-                <div class="login-input-wrap">
+                <div class="login-input-wrap" style="margin-top: 12px;">
                     <i class="fas fa-lock login-input-icon"></i>
-                    <input type="password" id="login-pass" placeholder="••••••••" required>
+                    <input type="password" id="login-pass" placeholder="كلمة المرور / Password" required style="text-align: right;">
                 </div>
-                <button type="submit" class="login-btn-submit">
-                    <i class="fas fa-sign-in-alt"></i>
+                <button type="submit" class="login-btn-submit" id="auth-submit-btn" style="margin-top: 16px; font-size: 1rem; font-weight: 600; gap: 8px;">
+                    <i class="fas fa-sign-in-alt"></i> <span id="auth-submit-text">تسجيل الدخول</span>
                 </button>
             </form>
-            <div class="login-divider"></div>
-            <button class="login-btn-google" onclick="loginWithGoogle()">
-                <i class="fas fa-user-plus"></i>
-            </button>
+            <p id="auth-toggle-msg" style="margin-top: 16px; font-size: 0.88rem; color: var(--text-muted); text-align: center;">
+                <span id="toggle-label">ليس لديك حساب؟</span>
+                <a href="#" id="toggle-auth-btn" onclick="toggleAuthMode(event)" style="color: var(--primary); font-weight: 700; text-decoration: none; margin-right: 4px;">إنشاء حساب جديد</a>
+            </p>
         </div>
     </div>
 
@@ -62,6 +65,9 @@
                 </button>
                 <button class="nav-btn" onclick="switchTab('masarif')" id="tab-masarif">
                     <i class="fas fa-money-bill-wave"></i> <span>المصاريف</span>
+                </button>
+                <button class="nav-btn" onclick="switchTab('stock')" id="tab-stock">
+                    <i class="fas fa-boxes"></i> <span>المخزون</span>
                 </button>
                 <button class="nav-btn" onclick="switchTab('fournisseur')" id="tab-fournisseur">
                     <i class="fas fa-truck"></i> <span>الفورنيسور</span>
@@ -184,6 +190,20 @@
                     </div>
                 </div>
             </div>
+            
+            <!-- TRADING CHART -->
+            <div class="card" style="margin-top: 20px; padding: 15px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3 style="display: flex; align-items: center; gap: 8px; color: var(--primary); margin: 0;">
+                        <i class="fas fa-chart-line"></i> مؤشر السوق (مباشر)
+                    </h3>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span id="live-price" style="font-size: 0.9rem; font-weight: bold; color: #10b981;" dir="ltr">0.00</span>
+                        <span style="font-size: 0.75rem; color: var(--text-muted); background: rgba(0,0,0,0.05); padding: 2px 6px; border-radius: 4px;">بيانات وهمية</span>
+                    </div>
+                </div>
+                <div id="trading-chart-container" style="width: 100%; height: 350px; position: relative;" dir="ltr"></div>
+            </div>
         </div>
 
         <!-- BL TAB -->
@@ -274,6 +294,162 @@
             </div>
         </div>
 
+        <!-- STOCK TAB -->
+        <div id="tab-content-stock" class="tab-content">
+            <div class="section-header">
+                <h2><i class="fas fa-boxes"></i> المخزون</h2>
+                <div class="header-actions">
+                    <button class="btn btn-success btn-sm" onclick="openProductModal()">
+                        <i class="fas fa-plus"></i> منتج جديد
+                    </button>
+                    <button class="btn btn-primary btn-sm" onclick="openStockSaleModal()">
+                        <i class="fas fa-cash-register"></i> تسجيل بيع
+                    </button>
+                    <button class="btn btn-outline btn-sm" onclick="exportStockPDF()">
+                        <i class="fas fa-file-pdf"></i> تقرير
+                    </button>
+                </div>
+            </div>
+
+            <!-- Stock Summary Cards -->
+            <div class="stock-summary-grid">
+                <div class="stock-summary-card">
+                    <div class="stock-summary-icon" style="background:rgba(37,99,235,0.1);color:#2563eb;"><i class="fas fa-cubes"></i></div>
+                    <div class="stock-summary-info">
+                        <h4 id="stock-total-products">0</h4>
+                        <span>عدد المنتجات</span>
+                    </div>
+                </div>
+                <div class="stock-summary-card">
+                    <div class="stock-summary-icon" style="background:rgba(16,185,129,0.1);color:#059669;"><i class="fas fa-coins"></i></div>
+                    <div class="stock-summary-info">
+                        <h4 id="stock-total-value">0 DH</h4>
+                        <span>قيمة المخزون (بيع)</span>
+                    </div>
+                </div>
+                <div class="stock-summary-card">
+                    <div class="stock-summary-icon" style="background:rgba(245,158,11,0.1);color:#d97706;"><i class="fas fa-money-bill-alt"></i></div>
+                    <div class="stock-summary-info">
+                        <h4 id="stock-cost-value">0 DH</h4>
+                        <span>قيمة المخزون (تكلفة)</span>
+                    </div>
+                </div>
+                <div class="stock-summary-card">
+                    <div class="stock-summary-icon" style="background:rgba(239,68,68,0.1);color:#dc2626;"><i class="fas fa-exclamation-triangle"></i></div>
+                    <div class="stock-summary-info">
+                        <h4 id="stock-low-count">0</h4>
+                        <span>منتجات ناقصة</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Low Stock Alerts -->
+            <div id="stock-alerts-container" style="display:none;"></div>
+
+            <!-- Products Grid -->
+            <div id="stock-products-list" class="stock-products-grid"></div>
+        </div>
+
+        <!-- PRODUCT MODAL -->
+        <div id="product-modal" class="modal" style="display:none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 id="product-modal-title">منتج جديد</h3>
+                    <button class="modal-close" onclick="closeProductModal()">&times;</button>
+                </div>
+                <form id="product-form" onsubmit="saveProduct(event)">
+                    <input type="hidden" id="product-edit-id">
+                    <div class="form-group">
+                        <label>اسم المنتج</label>
+                        <input type="text" id="product-name" required placeholder="مثال: Crema Marfil, Nero Marquina...">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>سعر الشراء (التكلفة)</label>
+                            <input type="text" inputmode="decimal" data-numeric id="product-cost" required placeholder="0.00">
+                        </div>
+                        <div class="form-group">
+                            <label>سعر البيع</label>
+                            <input type="text" inputmode="decimal" data-numeric id="product-sell" required placeholder="0.00">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>الكمية المتوفرة</label>
+                        <input type="text" inputmode="decimal" data-numeric id="product-qty" required placeholder="0">
+                    </div>
+                    <div class="form-group">
+                        <label>صورة المنتج (اختياري)</label>
+                        <div class="product-image-upload">
+                            <input type="file" id="product-image" accept="image/*" onchange="previewProductImage(this)">
+                            <div id="product-image-preview" class="product-image-preview-box">
+                                <i class="fas fa-camera"></i>
+                                <span>اختر صورة</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>حد التنبيه (الحد الأدنى)</label>
+                        <input type="text" inputmode="decimal" data-numeric id="product-threshold" placeholder="5">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">
+                        <i class="fas fa-save"></i> حفظ
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- STOCK SALE MODAL -->
+        <div id="stock-sale-modal" class="modal" style="display:none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3><i class="fas fa-cash-register"></i> تسجيل بيع من المخزون</h3>
+                    <button class="modal-close" onclick="closeStockSaleModal()">&times;</button>
+                </div>
+                <form id="stock-sale-form" onsubmit="saveStockSale(event)">
+                    <div class="form-group">
+                        <label>اختر المنتج</label>
+                        <select id="stock-sale-product" onchange="onStockSaleProductChange()" required>
+                            <option value="">-- اختر المنتج --</option>
+                        </select>
+                    </div>
+                    <div id="stock-sale-info" style="display:none;">
+                        <div class="stock-sale-info-bar">
+                            <span>المتوفر: <strong id="stock-sale-available">0</strong></span>
+                            <span>سعر البيع: <strong id="stock-sale-unit-price">0</strong></span>
+                            <span>التكلفة: <strong id="stock-sale-cost-price">0</strong></span>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>الكمية المباعة</label>
+                        <input type="text" inputmode="decimal" data-numeric id="stock-sale-qty" required placeholder="0" oninput="calcStockSaleTotal()">
+                    </div>
+                    <div class="form-group">
+                        <label>المجموع</label>
+                        <input type="text" id="stock-sale-total" readonly class="input-readonly">
+                    </div>
+                    <div class="form-group">
+                        <label>الربح المتوقع</label>
+                        <input type="text" id="stock-sale-profit" readonly class="input-readonly" style="color:var(--success);font-weight:700;">
+                    </div>
+                    <div class="form-group">
+                        <label>طريقة الدفع</label>
+                        <div class="payment-toggle">
+                            <button type="button" class="payment-btn active" id="ss-cash" onclick="selectStockSalePayment('espece')">
+                                <i class="fas fa-money-bill-wave"></i> Espèce
+                            </button>
+                            <button type="button" class="payment-btn" id="ss-check" onclick="selectStockSalePayment('cheque')">
+                                <i class="fas fa-money-check"></i> Chèque
+                            </button>
+                        </div>
+                        <input type="hidden" id="stock-sale-payment" value="espece">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">
+                        <i class="fas fa-check-circle"></i> تأكيد البيع
+                    </button>
+                </form>
+            </div>
+        </div>
+
         <!-- FOURNISSEUR TAB -->
         <div id="tab-content-fournisseur" class="tab-content">
             <div class="section-header">
@@ -313,7 +489,7 @@
                     </div>
                     <div class="form-group">
                         <label>المبلغ</label>
-                        <input type="number" id="masarif-amount" step="0.01" required placeholder="0.00" lang="fr">
+                        <input type="text" inputmode="decimal" data-numeric id="masarif-amount" step="0.01" required placeholder="0.00">
                     </div>
                     <div class="form-group">
                         <label>طريقة الدفع</label>
@@ -340,31 +516,39 @@
 
         <!-- FOURNISSEUR MODAL -->
         <div id="fournisseur-modal" class="modal" style="display:none;">
-            <div class="modal-content">
+            <div class="modal-content modal-lg">
                 <div class="modal-header">
                     <h3>فورنيسور جديد</h3>
                     <button class="modal-close" onclick="closeFournisseurModal()">&times;</button>
                 </div>
                 <form id="fournisseur-form" onsubmit="saveFournisseur(event)">
-                    <div class="form-group">
-                        <label>الاسم</label>
-                        <input type="text" id="fourn-name" required placeholder="اسم الفورنيسور">
-                    </div>
-                    <div class="form-group">
-                        <label>الهاتف</label>
-                        <input type="text" id="fourn-phone" placeholder="رقم الهاتف">
-                    </div>
-                    <div class="form-group">
-                        <label>أنواع الرخام</label>
-                        <div id="fourn-marble-types-list">
-                            <div class="fourn-marble-type-row">
-                                <input type="text" class="fourn-marble-type-input" placeholder="مثال: galax, emperador...">
-                            </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>الاسم</label>
+                            <input type="text" id="fourn-name" required placeholder="اسم الفورنيسور">
                         </div>
-                        <button type="button" class="btn btn-outline btn-sm" onclick="addMarbleTypeRow()" style="margin-top:6px;">
-                            <i class="fas fa-plus"></i> إضافة نوع
+                        <div class="form-group">
+                            <label>الهاتف</label>
+                            <input type="text" id="fourn-phone" placeholder="رقم الهاتف">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>السلع المشتراة (الفاتورة / التوصيل)</label>
+                        <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1.2fr 1.2fr 32px;gap:8px;margin-bottom:4px;font-size:0.75rem;color:var(--text-muted);padding:0 2px;" class="fourn-new-prod-header">
+                            <span>النوع</span><span>الكمية</span><span>م²</span><span>الثمن</span><span>المجموع</span><span></span>
+                        </div>
+                        <div id="fourn-new-products-list"></div>
+                        <button type="button" class="btn btn-outline btn-sm" onclick="addNewFournisseurRow()" style="margin-top:6px;">
+                            <i class="fas fa-plus"></i> إضافة منتج
                         </button>
                     </div>
+
+                    <div class="bl-summary" style="margin-top:10px; margin-bottom:16px;">
+                        <span>المجموع الكلي:</span>
+                        <strong id="fourn-new-grand-total">0.00 DH</strong>
+                    </div>
+
                     <div class="form-group">
                         <label>طريقة الدفع المعتادة</label>
                         <div class="payment-toggle">
@@ -407,8 +591,8 @@
                             <input type="date" id="fourn-bl-date" lang="fr">
                         </div>
                     </div>
-                    <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 22px;gap:6px;margin-bottom:4px;font-size:0.75rem;color:var(--text-muted);padding:0 2px;">
-                        <span>النوع</span><span>م²</span><span>الثمن</span><span>المجموع</span><span></span>
+                    <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 22px;gap:6px;margin-bottom:4px;font-size:0.75rem;color:var(--text-muted);padding:0 2px;">
+                        <span>النوع</span><span>الكمية</span><span>م²</span><span>الثمن</span><span>المجموع</span><span></span>
                     </div>
                     <div id="fourn-bl-products"></div>
                     <button type="button" class="btn btn-outline btn-sm" onclick="addFournProductRow()" style="margin:8px 0 12px;">
@@ -436,7 +620,7 @@
                     <input type="hidden" id="fourn-payment-id">
                     <div class="form-group">
                         <label>المبلغ المدفوع</label>
-                        <input type="number" id="fourn-payment-amount" step="0.01" required placeholder="0.00" lang="fr">
+                        <input type="text" inputmode="decimal" data-numeric id="fourn-payment-amount" step="0.01" required placeholder="0.00">
                     </div>
                     <div class="form-group">
                         <label>طريقة الدفع</label>
@@ -492,47 +676,76 @@
                 <button class="btn btn-primary" onclick="saveSettings()">
                     <i class="fas fa-save"></i> <span data-fr="Enregistrer" data-ar="حفظ">حفظ</span>
                 </button>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 15px; border-top: 1px solid var(--border); padding-top: 15px;">
+                    <button type="button" class="btn btn-outline" onclick="clearAllData()" style="border-color: #ef4444; color: #ef4444; flex: 1; min-width: 200px;">
+                        <i class="fas fa-trash-alt"></i> مسح كل البيانات وتصفير الحسابات
+                    </button>
+                </div>
             </div>
         </div>
 
         <!-- JOURNAL MODAL -->
         <div id="journal-modal" class="modal" style="display:none;">
-            <div class="modal-content">
+            <div class="modal-content modal-lg">
                 <div class="modal-header">
-                    <h3 data-fr="Nouvelle entrée" data-ar="إضافة مبيعة جديدة">إضافة مبيعة جديدة</h3>
+                    <h3>مبيعة جديدة</h3>
                     <button class="modal-close" onclick="closeJournalModal()">&times;</button>
                 </div>
                 <form id="journal-form" onsubmit="saveQuickEntry(event)">
-                    <div class="form-group">
-                        <label data-fr="Type de marbre" data-ar="نوع الرخام">نوع الرخام</label>
-                        <input type="text" id="entry-type" required placeholder="مثال: galax, emperador...">
+                    <!-- Client + Date -->
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>العميل</label>
+                            <select id="entry-client">
+                                <option value="">-- عميل غير محدد --</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>التاريخ</label>
+                            <input type="date" id="entry-date" lang="fr" translate="no">
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label data-fr="Surface (m²)" data-ar="المساحة (م²)">المساحة (م²)</label>
-                        <input type="number" id="entry-meters" step="0.01" required placeholder="0.00" lang="fr">
+
+                    <!-- Headers grid -->
+                    <div class="journal-col-headers">
+                        <span>النوع</span><span>الثمن</span><span>المساحة (م²)</span><span>المجموع</span>
                     </div>
-                    <div class="form-group">
-                        <label data-fr="Prix unitaire" data-ar="ثمن المتر">ثمن المتر</label>
-                        <input type="number" id="entry-price" step="0.01" required placeholder="0.00" lang="fr">
+                    <!-- Single product row -->
+                    <div class="journal-product-row">
+                        <input type="text" id="entry-type" required placeholder="نوع الرخام...">
+                        <input type="text" inputmode="decimal" id="entry-price" placeholder="0.00" lang="en" translate="no"
+                            oninput="calcJournalRow('price')">
+                        <input type="text" inputmode="decimal" id="entry-meters" placeholder="0.00" lang="en" translate="no"
+                            style="background:#eff6ff;border-color:#3b82f6;"
+                            oninput="calcJournalRow('meters')">
+                        <input type="text" inputmode="decimal" id="entry-total" placeholder="0.00" lang="en" translate="no"
+                            style="background:#f0fdf4;border-color:#10b981;font-weight:700;"
+                            oninput="calcJournalRow('total')">
                     </div>
+
+                    <!-- رسوم الخدمة -->
                     <div class="form-group">
-                        <label>المجموع</label>
-                        <input type="text" id="entry-total" readonly class="input-readonly">
+                        <label style="font-size:0.85rem;color:var(--text-muted);">رسوم الخدمة / العمل (DH) — اختياري</label>
+                        <input type="text" inputmode="decimal" id="entry-service" placeholder="0.00" lang="en" translate="no"
+                            style="border-color:#f59e0b;" oninput="calcJournalRow('service')">
                     </div>
+
+                    <!-- طريقة الدفع -->
                     <div class="form-group">
-                        <label>طريقة الدفع</label>
-                        <div class="payment-toggle">
-                            <button type="button" class="payment-btn active" id="pay-cash" onclick="selectPayment('espece')">
-                                <i class="fas fa-money-bill-wave"></i> Espèce
+                        <label style="font-size:0.85rem;color:var(--text-muted);">طريقة الدفع</label>
+                        <div style="display:flex;gap:8px;">
+                            <button type="button" id="pay-cash" class="btn btn-sm active" onclick="selectPayment('espece')" style="flex:1;">
+                                <i class="fas fa-money-bill-wave"></i> نقدي
                             </button>
-                            <button type="button" class="payment-btn" id="pay-check" onclick="selectPayment('cheque')">
-                                <i class="fas fa-money-check"></i> Chèque
+                            <button type="button" id="pay-check" class="btn btn-sm" onclick="selectPayment('cheque')" style="flex:1;">
+                                <i class="fas fa-money-check"></i> شيك
                             </button>
                         </div>
                         <input type="hidden" id="entry-payment" value="espece">
                     </div>
+
                     <button type="submit" class="btn btn-primary btn-block">
-                        <i class="fas fa-save"></i> حفظ
+                        <i class="fas fa-save"></i> حفظ المبيعة
                     </button>
                 </form>
             </div>
@@ -583,19 +796,34 @@
                             <input type="date" id="bl-date" lang="fr">
                         </div>
                     </div>
-                    <div id="bl-products">
-                        <div class="bl-product-row">
-                            <input type="text" placeholder="نوع الرخام" class="bl-prod-name">
-                            <input type="number" step="0.01" placeholder="المساحة" class="bl-prod-meters" lang="fr">
-                            <input type="number" step="0.01" placeholder="الثمن" class="bl-prod-price" lang="fr">
-                            <span class="bl-prod-total">0.00</span>
-                        </div>
+                    <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 24px;gap:6px;margin-bottom:4px;font-size:0.75rem;color:var(--text-muted);padding:0 2px;">
+                        <span>النوع</span><span>الثمن</span><span>المساحة (م²)</span><span>المجموع</span><span></span>
                     </div>
-                    <button type="button" class="btn btn-outline btn-sm" onclick="addBLProductRow()">
+                    <div id="bl-products"></div>
+                    <button type="button" class="btn btn-outline btn-sm" onclick="addBLProductRow()" style="margin:8px 0;">
                         <i class="fas fa-plus"></i> إضافة منتج
                     </button>
+                    <!-- Frais de service -->
+                    <div class="form-group" style="margin-top:8px;">
+                        <label style="font-size:0.85rem;color:var(--text-muted);">رسوم الخدمة / العمل (DH) — اختياري</label>
+                        <input type="text" inputmode="decimal" id="bl-service" placeholder="0.00" lang="en" translate="no"
+                            oninput="calcBLGrand()" style="border-color:#f59e0b;">
+                    </div>
+                    <!-- Mode de paiement -->
+                    <div class="form-group" style="margin-top:8px;">
+                        <label style="font-size:0.85rem;color:var(--text-muted);">طريقة الدفع</label>
+                        <div style="display:flex;gap:8px;">
+                            <button type="button" id="bl-pay-cash" class="btn btn-sm active" onclick="setBLPayment('espece')" style="flex:1;">
+                                <i class="fas fa-money-bill-wave"></i> نقدي
+                            </button>
+                            <button type="button" id="bl-pay-check" class="btn btn-sm" onclick="setBLPayment('cheque')" style="flex:1;">
+                                <i class="fas fa-money-check"></i> شيك
+                            </button>
+                        </div>
+                        <input type="hidden" id="bl-payment" value="espece">
+                    </div>
                     <div class="bl-summary">
-                        <span data-fr="Total" data-ar="المجموع الكلي">المجموع الكلي:</span>
+                        <span>المجموع الإجمالي:</span>
                         <strong id="bl-grand-total">0.00</strong>
                     </div>
                     <button type="submit" class="btn btn-primary btn-block">
@@ -619,7 +847,7 @@
                     </div>
                     <div class="form-group">
                         <label>المبلغ المدفوع / السلفة</label>
-                        <input type="number" id="staff-amount" step="0.01" required placeholder="0.00" lang="fr">
+                        <input type="text" inputmode="decimal" data-numeric id="staff-amount" step="0.01" required placeholder="0.00">
                     </div>
                     <div class="form-group">
                         <label>ملاحظة</label>
@@ -643,7 +871,7 @@
                     <input type="hidden" id="payment-client-id">
                     <div class="form-group">
                         <label>المبلغ المدفوع</label>
-                        <input type="number" id="payment-amount" step="0.01" required placeholder="0.00" lang="fr">
+                        <input type="text" inputmode="decimal" data-numeric id="payment-amount" step="0.01" required placeholder="0.00">
                     </div>
                     <div class="form-group">
                         <label>طريقة الدفع</label>
@@ -664,17 +892,18 @@
             </div>
         </div>
 
-        <!-- FLOATING WHATSAPP -->
-        <a href="https://wa.me/" target="_blank" class="whatsapp-float">
-            <i class="fab fa-whatsapp"></i>
-        </a>
     </div>
 
     <!-- FIREBASE SDKs -->
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <script src="js/firebase-config.js"></script>
-    <script src="js/app.js?v=11"></script>
+    <script src="js/app.js?v=13"></script>
+    <script src="js/trading-chart.js?v=1"></script>
 </body>
 </html>

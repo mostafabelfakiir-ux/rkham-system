@@ -15,7 +15,9 @@ let D = {
     masarif: [],
     fournisseurs: [],
     fourn_bls: [],
-    fourn_payments: []
+    fourn_payments: [],
+    products: [],
+    stock_sales: []
 };
 
 // ============ UTILITY FUNCTIONS ============
@@ -26,38 +28,146 @@ function generateId() {
 function formatCurrency(num) {
     let suffix = ' DH';
     if (D.settings.currency === 'EUR') suffix = ' €';
+    // Force en-US locale to guarantee Western Arabic numerals (1234567890)
     return Number(num).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + suffix;
 }
 
 function formatNumber(num, decimals = 2) {
+    // Force en-US locale to guarantee Western Arabic numerals (1234567890)
     return Number(num).toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }
 
+/**
+ * Converts Eastern Arabic/Indic digits (٠١٢٣٤٥٦٧٨٩) to Western Arabic (0-9)
+ * and strips any character that is not a digit, dot, or leading minus.
+ */
+function toWesternFloat(str) {
+    // Normalize Eastern Arabic-Indic digits
+    str = String(str).replace(/[٠١٢٣٤٥٦٧٨٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+    // Replace Arabic decimal comma with dot
+    str = str.replace(/،/g, '.').replace(/,/g, '.');
+    // Keep only digits, one dot, and optional leading minus
+    str = str.replace(/[^0-9.\-]/g, '');
+    // Prevent multiple dots
+    const parts = str.split('.');
+    if (parts.length > 2) str = parts[0] + '.' + parts.slice(1).join('');
+    return str;
+}
+
+/**
+ * Attaches paste + input sanitizer to a numeric text input so it:
+ * - Accepts floats (preserves decimal point)
+ * - Converts Eastern Arabic digits to Western Arabic
+ * - Strips all non-numeric characters except dot
+ */
+function attachNumericSanitizer(input) {
+    if (!input || input.dataset.sanitized) return;
+    input.dataset.sanitized = '1';
+
+    input.addEventListener('paste', function(e) {
+        e.preventDefault();
+        const pasted = (e.clipboardData || window.clipboardData).getData('text');
+        const cleaned = toWesternFloat(pasted);
+        // Insert at cursor position
+        const start = this.selectionStart;
+        const end = this.selectionEnd;
+        const current = this.value;
+        this.value = current.substring(0, start) + cleaned + current.substring(end);
+        // Re-sanitize the whole value
+        this.value = toWesternFloat(this.value);
+        this.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
+    input.addEventListener('input', function() {
+        const caret = this.selectionStart;
+        const cleaned = toWesternFloat(this.value);
+        if (this.value !== cleaned) {
+            this.value = cleaned;
+            // Restore caret (best effort)
+            try { this.setSelectionRange(caret, caret); } catch(e) {}
+        }
+    });
+}
+
+/** Attaches sanitizer to all numeric inputs within a container (or document) */
+function sanitizeNumericInputs(container) {
+    const root = container || document;
+    root.querySelectorAll('input[data-numeric]').forEach(attachNumericSanitizer);
+}
+
 // ============ AUTH / LOGIN ============
-function handleLogin(e) {
-    e.preventDefault();
-    const u = document.getElementById('login-user').value;
-    const p = document.getElementById('login-pass').value;
-    if (u === 'admin' && p === 'admin') {
-        showApp();
+function toggleAuthMode(e) {
+    if (e) e.preventDefault();
+    const modeInput = document.getElementById('auth-mode');
+    const submitText = document.getElementById('auth-submit-text');
+    const toggleLabel = document.getElementById('toggle-label');
+    const toggleBtn = document.getElementById('toggle-auth-btn');
+    
+    if (modeInput.value === 'login') {
+        modeInput.value = 'register';
+        submitText.textContent = D.settings.lang === 'ar' ? 'إنشاء حساب جديد' : 'Créer un compte';
+        toggleLabel.textContent = D.settings.lang === 'ar' ? 'لديك حساب بالفعل؟' : 'Vous avez déjà un compte ?';
+        toggleBtn.textContent = D.settings.lang === 'ar' ? 'تسجيل الدخول' : 'Se connecter';
     } else {
-        alert(D.settings.lang === 'ar' ? 'خطأ في اسم المستخدم أو كلمة المرور' : 'Nom d\'utilisateur ou mot de passe incorrect');
+        modeInput.value = 'login';
+        submitText.textContent = D.settings.lang === 'ar' ? 'تسجيل الدخول' : 'Se connecter';
+        toggleLabel.textContent = D.settings.lang === 'ar' ? 'ليس لديك حساب؟' : 'Pas de compte ?';
+        toggleBtn.textContent = D.settings.lang === 'ar' ? 'إنشاء حساب جديد' : 'Créer un compte';
     }
 }
 
-function loginWithGoogle() {
-    const provider = new firebase.auth.GoogleAuthProvider();
-    auth.signInWithPopup(provider).catch(err => {
-        console.error('Google login error:', err);
-        alert('خطأ في تسجيل الدخول: ' + err.message);
-    });
+let _authSubmitting = false;
+function handleLogin(e) {
+    e.preventDefault();
+    if (_authSubmitting) return;
+    _authSubmitting = true;
+
+    const mode = document.getElementById('auth-mode').value;
+    const email = document.getElementById('login-email').value.trim();
+    const pass = document.getElementById('login-pass').value;
+
+    const btn = document.getElementById('auth-submit-btn');
+    const originalHtml = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-left: 8px;"></i> ' + (D.settings.lang === 'ar' ? 'جاري التحميل...' : 'Chargement...');
+    btn.disabled = true;
+
+    if (mode === 'register') {
+        auth.createUserWithEmailAndPassword(email, pass)
+            .then((userCredential) => {
+                alert(D.settings.lang === 'ar' ? 'تم إنشاء الحساب بنجاح!' : 'Compte créé avec succès !');
+                _authSubmitting = false;
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+            })
+            .catch((err) => {
+                console.error('Registration error:', err);
+                alert((D.settings.lang === 'ar' ? 'خطأ في إنشاء الحساب: ' : 'Erreur de création: ') + err.message);
+                _authSubmitting = false;
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+            });
+    } else {
+        auth.signInWithEmailAndPassword(email, pass)
+            .then((userCredential) => {
+                _authSubmitting = false;
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+            })
+            .catch((err) => {
+                console.error('Login error:', err);
+                alert((D.settings.lang === 'ar' ? 'خطأ في البريد الإلكتروني أو كلمة المرور: ' : 'Email ou mot de passe incorrect: ') + err.message);
+                _authSubmitting = false;
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+            });
+    }
 }
+
 
 function handleLogout() {
     auth.signOut().then(() => {
         currentUser = null;
-        document.getElementById('login-screen').style.display = 'flex';
-        document.getElementById('app-interface').style.display = 'none';
+        showLoginScreen();
     });
 }
 
@@ -67,10 +177,19 @@ function showApp() {
     load();
 }
 
+function showLoginScreen() {
+    document.getElementById('login-screen').style.display = 'flex';
+    document.getElementById('app-interface').style.display = 'none';
+}
+
 // ============ FIREBASE AUTH STATE ============
 auth.onAuthStateChanged(user => {
     if (user) {
         currentUser = user;
+        showApp();
+    } else {
+        currentUser = null;
+        showLoginScreen();
     }
 });
 
@@ -79,40 +198,42 @@ function save() {
     if (currentUser) {
         db.collection('users').doc(currentUser.uid).set(D)
             .catch(err => console.error('Save error:', err));
+        localStorage.setItem(DB + '_' + currentUser.uid, JSON.stringify(D));
     }
-    localStorage.setItem(DB, JSON.stringify(D));
+}
+
+function freshD() {
+    return {
+        bl_list: [], clients: [], journal: [], staff: [], payments: [],
+        masarif: [], fournisseurs: [], fourn_bls: [], fourn_payments: [],
+        settings: { lang: 'ar', currency: 'MAD', company: { name: '', phone: '', address: '' } }
+    };
 }
 
 function load() {
-    if (currentUser) {
-        db.collection('users').doc(currentUser.uid).get().then(doc => {
-            if (doc.exists) {
-                const data = doc.data();
-                D = { ...D, ...data };
-            } else {
-                // Try local storage fallback
-                const local = localStorage.getItem(DB);
-                if (local) {
-                    try { D = { ...D, ...JSON.parse(local) }; } catch(e) {}
-                }
-            }
-            refreshAll();
-        }).catch(err => {
-            console.error('Load error:', err);
-            // Fallback to local
-            const local = localStorage.getItem(DB);
+    if (!currentUser) { refreshAll(); return; }
+    db.collection('users').doc(currentUser.uid).get().then(doc => {
+        if (doc.exists) {
+            // Full replace — never mix with another user's data
+            const remote = doc.data();
+            D = { ...freshD(), ...remote };
+        } else {
+            const local = localStorage.getItem(DB + '_' + currentUser.uid);
             if (local) {
-                try { D = { ...D, ...JSON.parse(local) }; } catch(e) {}
+                try { D = { ...freshD(), ...JSON.parse(local) }; } catch(e) { D = freshD(); }
+            } else {
+                D = freshD();
             }
-            refreshAll();
-        });
-    } else {
-        const local = localStorage.getItem(DB);
-        if (local) {
-            try { D = { ...D, ...JSON.parse(local) }; } catch(e) {}
         }
         refreshAll();
-    }
+    }).catch(err => {
+        console.error('Load error:', err);
+        const local = localStorage.getItem(DB + '_' + currentUser.uid);
+        if (local) {
+            try { D = { ...freshD(), ...JSON.parse(local) }; } catch(e) { D = freshD(); }
+        }
+        refreshAll();
+    });
 }
 
 // ============ TAB NAVIGATION ============
@@ -133,6 +254,7 @@ function switchTab(tab) {
     if (tab === 'staff') populateStaffList();
     if (tab === 'masarif') populateMasarif();
     if (tab === 'fournisseur') populateFournisseurList();
+    if (tab === 'stock') populateStockTab();
     if (tab === 'settings') populateSettings();
 }
 
@@ -142,27 +264,13 @@ function populateJournal() {
     const totalAmountEl = document.getElementById('journal-total-amount');
     const totalMetersEl = document.getElementById('journal-total-meters');
     const totalDateEl = document.getElementById('journal-total-date');
-    
+
     if (!D.journal) D.journal = [];
-    
-    // Also include BL entries in journal
-    let allEntries = [...(D.journal || [])];
-    
-    // Add entries from BLs
-    (D.bl_list || []).forEach(bl => {
-        (bl.products || []).forEach(prod => {
-            allEntries.push({
-                id: prod.id || generateId(),
-                type: prod.name || 'N/A',
-                meters: prod.total_m2 || 0,
-                price: prod.pu || 0,
-                total: (prod.total_m2 || 0) * (prod.pu || 0),
-                date: bl.date || new Date().toISOString().split('T')[0],
-                source: 'bl',
-                bl_id: bl.id
-            });
-        });
-    });
+
+    // All journal entries — direct + bl_snapshots (independent from bl_list)
+    const allEntries = (D.journal || [])
+        .filter(j => j.source === 'direct' || j.source === 'bl_snapshot')
+        .map(j => ({ ...j }));
     
     // Sort by date descending
     allEntries.sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -176,9 +284,6 @@ function populateJournal() {
         grandMeters += Number(line.meters) || 0;
         
         const dateStr = line.date || new Date().toLocaleDateString('fr-FR');
-        const whatsappMsg = encodeURIComponent(
-            `${line.type}: ${formatNumber(line.meters)} m² × ${formatNumber(line.price)} = ${formatCurrency(total)}`
-        );
         
         const payBadge = line.payment === 'cheque'
             ? '<span class="badge-cheque">Chèque</span>'
@@ -192,9 +297,9 @@ function populateJournal() {
                 <td class="col-total"><span dir="ltr" style="display:inline-block;">${formatNumber(total, 0).replace(/,/g, ' ')}</span></td>
                 <td class="col-payment">${payBadge}</td>
                 <td class="col-date"><span dir="ltr" style="display:inline-block;">${dateStr}</span></td>
-                <td class="col-actions">
-                    <button class="btn-whatsapp" onclick="window.open('https://wa.me/?text=${whatsappMsg}','_blank')" title="WhatsApp">
-                        <i class="fab fa-whatsapp"></i>
+                <td class="col-actions" style="display: flex; justify-content: center; align-items: center;">
+                    <button class="btn-delete-row" style="width: 26px; height: 26px; font-size: 0.8rem;" onclick="deleteJournalEntry('${line.id}')" title="حذف">
+                        <i class="fas fa-trash"></i>
                     </button>
                 </td>
             </tr>
@@ -213,26 +318,49 @@ function deleteJournalEntry(id) {
     populateJournal();
 }
 
+let _jLock = false;
+function calcJournalRow(changed) {
+    if (_jLock) return;
+    _jLock = true;
+    const p = parseFloat(document.getElementById('entry-price').value)   || 0;
+    const m = parseFloat(document.getElementById('entry-meters').value)  || 0;
+    const s = parseFloat(document.getElementById('entry-service').value) || 0;
+    const t = parseFloat(document.getElementById('entry-total').value)   || 0;
+
+    if (changed === 'total' && p > 0 && t > 0) {
+        document.getElementById('entry-meters').value = ((t - s) / p).toFixed(3);
+    } else if (changed === 'meters' && p > 0) {
+        document.getElementById('entry-total').value = ((m * p) + s).toFixed(2);
+    } else if (changed === 'price') {
+        if (t > 0 && p > 0) document.getElementById('entry-meters').value = ((t - s) / p).toFixed(3);
+        else if (m > 0 && p > 0) document.getElementById('entry-total').value = ((m * p) + s).toFixed(2);
+    } else if (changed === 'service') {
+        if (m > 0 && p > 0) document.getElementById('entry-total').value = ((m * p) + s).toFixed(2);
+    }
+    _jLock = false;
+}
+
 function openJournalModal() {
     document.getElementById('journal-modal').style.display = 'flex';
     document.getElementById('journal-form').reset();
     document.getElementById('entry-total').value = '';
+    document.getElementById('entry-service').value = '';
+    document.getElementById('entry-meters').value = '';
+    document.getElementById('entry-price').value = '';
+    document.getElementById('entry-type').value = '';
     document.getElementById('entry-payment').value = 'espece';
     document.getElementById('pay-cash').classList.add('active');
     document.getElementById('pay-check').classList.remove('active');
+    document.getElementById('entry-date').value = new Date().toISOString().split('T')[0];
 
-    const meters = document.getElementById('entry-meters');
-    const price = document.getElementById('entry-price');
-    const total = document.getElementById('entry-total');
-
-    const calc = () => {
-        const m = parseFloat(meters.value) || 0;
-        const p = parseFloat(price.value) || 0;
-        total.value = formatCurrency(m * p);
-    };
-
-    meters.oninput = calc;
-    price.oninput = calc;
+    // Populate client select
+    const select = document.getElementById('entry-client');
+    if (select) {
+        select.innerHTML = '<option value="">-- عميل غير محدد --</option>';
+        (D.clients || []).forEach(c => {
+            select.innerHTML += `<option value="${c.name}">${c.name}</option>`;
+        });
+    }
 }
 
 function closeJournalModal() {
@@ -245,61 +373,52 @@ function selectPayment(method) {
     document.getElementById('pay-check').classList.toggle('active', method === 'cheque');
 }
 
+
 let _journalSubmitting = false;
 function saveQuickEntry(e) {
     e.preventDefault();
     if (_journalSubmitting) return;
     _journalSubmitting = true;
 
-    const type = document.getElementById('entry-type').value;
-    const meters = parseFloat(document.getElementById('entry-meters').value) || 0;
-    const price = parseFloat(document.getElementById('entry-price').value) || 0;
-    const total = meters * price;
+    const type    = document.getElementById('entry-type').value.trim();
+    const client  = document.getElementById('entry-client')?.value || '';
+    const meters  = parseFloat(document.getElementById('entry-meters').value)  || 0;
+    const price   = parseFloat(document.getElementById('entry-price').value)   || 0;
+    const service = parseFloat(document.getElementById('entry-service').value) || 0;
+    const totalField = parseFloat(document.getElementById('entry-total').value) || 0;
+    const total   = totalField > 0 ? totalField : (meters * price) + service;
     const payment = document.getElementById('entry-payment').value || 'espece';
+    const date    = document.getElementById('entry-date').value || new Date().toISOString().split('T')[0];
+
+    if (!type || total <= 0) {
+        alert('يرجى إدخال نوع الرخام والمبلغ الإجمالي.');
+        _journalSubmitting = false;
+        return;
+    }
 
     if (!D.journal) D.journal = [];
-
-    const entry = {
-        id: generateId(),
-        type: type,
-        meters: meters,
-        price: price,
-        total: total,
-        payment: payment,
-        date: new Date().toISOString().split('T')[0],
-        source: 'direct'
-    };
-    
-    D.journal.push(entry);
+    D.journal.push({ id: generateId(), type, client, meters, price, service, total, payment, date, source: 'direct' });
     save();
     refreshAll();
     populateJournal();
     closeJournalModal();
     _journalSubmitting = false;
-    
-    alert(D.settings.lang === 'ar' ? 'تم الحفظ بنجاح!' : 'Enregistré avec succès !');
 }
 
 // ============ EXPORT JOURNAL ============
 function exportJournal() {
-    let text = 'نوع الرخام\tالأمتار\tالثمن\tالمجموع\tالتاريخ\n';
-    let allEntries = [...(D.journal || [])];
-    (D.bl_list || []).forEach(bl => {
-        (bl.products || []).forEach(prod => {
-            allEntries.push({
-                type: prod.name || '',
-                meters: prod.total_m2 || 0,
-                price: prod.pu || 0,
-                total: (prod.total_m2 || 0) * (prod.pu || 0),
-                date: bl.date || ''
-            });
-        });
+    let text = 'العميل/النوع\tالأمتار\tالثمن\tالمجموع\tالتاريخ\n';
+    const directEntries = (D.journal || []).filter(j => j.source === 'direct');
+    const blEntries = (D.bl_list || []).map(bl => ({
+        type: bl.client || 'بيع مباشر',
+        meters: bl.grand_total_m2 || 0,
+        price: bl.grand_total_m2 > 0 ? bl.grand_total_ttc / bl.grand_total_m2 : 0,
+        total: bl.grand_total_ttc || 0,
+        date: bl.date || ''
+    }));
+    [...directEntries, ...blEntries].forEach(e => {
+        text += `${e.type}\t${e.meters}\t${Number(e.price).toFixed(2)}\t${Number(e.total).toFixed(2)}\t${e.date}\n`;
     });
-    
-    allEntries.forEach(e => {
-        text += `${e.type}\t${e.meters}\t${e.price}\t${e.total}\t${e.date}\n`;
-    });
-    
     const blob = new Blob([text], { type: 'text/tab-separated-values' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -309,27 +428,37 @@ function exportJournal() {
 }
 
 // ============ BL (BON DE LIVRAISON) ============
+function blProductRowHTML(vals) {
+    const v = vals || {};
+    return `<div class="bl-product-row">
+        <input type="text" placeholder="نوع الرخام" class="bl-prod-name" value="${v.name||''}">
+        <input type="text" inputmode="decimal" placeholder="الثمن" class="bl-prod-price" lang="en" value="${v.price||''}" oninput="calcBLRow(this,'price')">
+        <input type="text" inputmode="decimal" placeholder="المساحة" class="bl-prod-meters" lang="en" value="${v.meters||''}" oninput="calcBLRow(this,'meters')">
+        <input type="text" inputmode="decimal" placeholder="المجموع" class="bl-prod-total-input" lang="en" value="${v.total||''}" oninput="calcBLRow(this,'total')" style="background:#f0fdf4;border-color:#10b981;">
+        <button type="button" class="btn-remove-row" onclick="this.closest('.bl-product-row').remove();calcBLGrand();" title="حذف"><i class="fas fa-times"></i></button>
+    </div>`;
+}
+
+function setBLPayment(mode) {
+    document.getElementById('bl-payment').value = mode;
+    document.getElementById('bl-pay-cash').classList.toggle('active', mode === 'espece');
+    document.getElementById('bl-pay-check').classList.toggle('active', mode === 'cheque');
+}
+
 function openNewBL() {
     document.getElementById('bl-modal').style.display = 'flex';
     document.getElementById('bl-form').reset();
     document.getElementById('bl-date').value = new Date().toISOString().split('T')[0];
-    
-    // Populate client select
+    document.getElementById('bl-service').value = '';
+    setBLPayment('espece');
+
     const select = document.getElementById('bl-client');
     select.innerHTML = '<option value="">-- اختر العميل --</option>';
     (D.clients || []).forEach(c => {
         select.innerHTML += `<option value="${c.name}">${c.name}</option>`;
     });
-    
-    // Reset products
-    document.getElementById('bl-products').innerHTML = `
-        <div class="bl-product-row">
-            <input type="text" placeholder="نوع الرخام" class="bl-prod-name">
-            <input type="number" step="0.01" placeholder="المساحة" class="bl-prod-meters" oninput="calcBLRow(this)" lang="fr">
-            <input type="number" step="0.01" placeholder="الثمن" class="bl-prod-price" oninput="calcBLRow(this)" lang="fr">
-            <span class="bl-prod-total">0.00</span>
-        </div>
-    `;
+
+    document.getElementById('bl-products').innerHTML = blProductRowHTML();
     document.getElementById('bl-grand-total').textContent = '0.00';
 }
 
@@ -340,31 +469,36 @@ function closeBLModal() {
 
 function addBLProductRow() {
     const container = document.getElementById('bl-products');
-    const row = document.createElement('div');
-    row.className = 'bl-product-row';
-    row.innerHTML = `
-        <input type="text" placeholder="نوع الرخام" class="bl-prod-name">
-        <input type="number" step="0.01" placeholder="المساحة" class="bl-prod-meters" oninput="calcBLRow(this)" lang="fr">
-        <input type="number" step="0.01" placeholder="الثمن" class="bl-prod-price" oninput="calcBLRow(this)" lang="fr">
-        <span class="bl-prod-total">0.00</span>
-    `;
-    container.appendChild(row);
+    const div = document.createElement('div');
+    div.innerHTML = blProductRowHTML();
+    container.appendChild(div.firstElementChild);
 }
 
-function calcBLRow(input) {
+function calcBLRow(input, changed) {
     const row = input.closest('.bl-product-row');
+    const price  = parseFloat(row.querySelector('.bl-prod-price').value) || 0;
     const meters = parseFloat(row.querySelector('.bl-prod-meters').value) || 0;
-    const price = parseFloat(row.querySelector('.bl-prod-price').value) || 0;
-    row.querySelector('.bl-prod-total').textContent = formatNumber(meters * price);
-    
-    // Update grand total
+    const total  = parseFloat(row.querySelector('.bl-prod-total-input').value) || 0;
+
+    if (changed === 'total' && price > 0) {
+        // Calcul inverse: Surface = Total / Prix
+        row.querySelector('.bl-prod-meters').value = (total / price).toFixed(3);
+    } else if (changed === 'meters' && price > 0) {
+        row.querySelector('.bl-prod-total-input').value = (meters * price).toFixed(2);
+    } else if (changed === 'price') {
+        if (meters > 0) row.querySelector('.bl-prod-total-input').value = (meters * price).toFixed(2);
+        else if (total > 0 && price > 0) row.querySelector('.bl-prod-meters').value = (total / price).toFixed(3);
+    }
+    calcBLGrand();
+}
+
+function calcBLGrand() {
     let grand = 0;
-    document.querySelectorAll('.bl-product-row').forEach(r => {
-        const m = parseFloat(r.querySelector('.bl-prod-meters').value) || 0;
-        const p = parseFloat(r.querySelector('.bl-prod-price').value) || 0;
-        grand += m * p;
+    document.querySelectorAll('#bl-products .bl-product-row').forEach(r => {
+        grand += parseFloat(r.querySelector('.bl-prod-total-input').value) || 0;
     });
-    document.getElementById('bl-grand-total').textContent = formatNumber(grand);
+    const service = parseFloat(document.getElementById('bl-service')?.value) || 0;
+    document.getElementById('bl-grand-total').textContent = formatNumber(grand + service);
 }
 
 let _blEditId = null;
@@ -381,12 +515,12 @@ function saveBL(e) {
     let grandM2 = 0, grandTotal = 0;
     
     document.querySelectorAll('#bl-modal .bl-product-row').forEach(row => {
-        const name = row.querySelector('.bl-prod-name').value;
+        const name   = row.querySelector('.bl-prod-name').value.trim();
         const meters = parseFloat(row.querySelector('.bl-prod-meters').value) || 0;
-        const price = parseFloat(row.querySelector('.bl-prod-price').value) || 0;
-        const total = meters * price;
-        
-        if (name && meters > 0) {
+        const price  = parseFloat(row.querySelector('.bl-prod-price').value) || 0;
+        const total  = parseFloat(row.querySelector('.bl-prod-total-input').value) || (meters * price);
+
+        if (name && total > 0) {
             products.push({
                 id: generateId(),
                 name, pu: price,
@@ -397,6 +531,8 @@ function saveBL(e) {
             grandTotal += total;
         }
     });
+    const blService = parseFloat(document.getElementById('bl-service')?.value) || 0;
+    grandTotal += blService;
     
     if (products.length === 0) {
         _blSubmitting = false;
@@ -404,8 +540,11 @@ function saveBL(e) {
         return;
     }
     
+    const paymentMode = document.getElementById('bl-payment')?.value || 'espece';
+
     if (_blEditId) {
-        // UPDATE existing BL
+        // UPDATE existing BL — remove old snapshots for this BL, re-add fresh ones
+        D.journal = (D.journal || []).filter(j => j.bl_id !== _blEditId);
         const idx = D.bl_list.findIndex(b => b.id === _blEditId);
         if (idx !== -1) {
             D.bl_list[idx].client = client;
@@ -415,19 +554,50 @@ function saveBL(e) {
             D.bl_list[idx].grand_total_tr = products.length;
             D.bl_list[idx].grand_total_ttc = grandTotal;
         }
+        // Re-push snapshots for updated BL
+        products.forEach(p => {
+            D.journal.push({
+                id: generateId(),
+                bl_id: _blEditId,
+                type: p.name,
+                meters: p.total_m2,
+                price: p.pu,
+                service: blService / products.length,
+                total: p.total_ttc,
+                payment: paymentMode,
+                date,
+                source: 'bl_snapshot'
+            });
+        });
         _blEditId = null;
     } else {
         // CREATE new BL
+        const blId = generateId();
         const bl = {
-            id: generateId(),
+            id: blId,
             client, date, products,
             grand_total_m2: grandM2,
             grand_total_tr: products.length,
             grand_total_ttc: grandTotal
         };
         D.bl_list.push(bl);
+        // Push independent journal snapshots — one per product
+        products.forEach(p => {
+            D.journal.push({
+                id: generateId(),
+                bl_id: blId,
+                type: p.name,
+                meters: p.total_m2,
+                price: p.pu,
+                service: blService / products.length,
+                total: p.total_ttc,
+                payment: paymentMode,
+                date,
+                source: 'bl_snapshot'
+            });
+        });
     }
-    
+
     save();
     closeBLModal();
     refreshAll();
@@ -457,18 +627,20 @@ function editBL(id) {
     const container = document.getElementById('bl-products');
     container.innerHTML = '';
     (bl.products || []).forEach(p => {
-        const row = document.createElement('div');
-        row.className = 'bl-product-row';
-        row.innerHTML = `
-            <input type="text" placeholder="نوع الرخام" class="bl-prod-name" value="${p.name || ''}">
-            <input type="number" step="0.01" placeholder="المساحة" class="bl-prod-meters" value="${p.total_m2 || ''}" oninput="calcBLRow(this)" lang="fr">
-            <input type="number" step="0.01" placeholder="الثمن" class="bl-prod-price" value="${p.pu || ''}" oninput="calcBLRow(this)" lang="fr">
-            <span class="bl-prod-total">${formatNumber((p.total_m2 || 0) * (p.pu || 0))}</span>
-        `;
-        container.appendChild(row);
+        const div = document.createElement('div');
+        div.innerHTML = blProductRowHTML({
+            name: p.name || '',
+            price: p.pu || '',
+            meters: p.total_m2 || '',
+            total: p.total_ttc || ((p.total_m2 || 0) * (p.pu || 0))
+        });
+        container.appendChild(div.firstElementChild);
     });
-    
+    document.getElementById('bl-service').value = bl.service || '';
     document.getElementById('bl-grand-total').textContent = formatNumber(bl.grand_total_ttc || 0);
+    // Payment mode — get from first journal snapshot of this BL
+    const snap = (D.journal || []).find(j => j.bl_id === id && j.source === 'bl_snapshot');
+    setBLPayment(snap?.payment || 'espece');
 }
 
 function populateBLList() {
@@ -492,9 +664,6 @@ function populateBLList() {
                 <div style="display:flex;gap:5px;align-items:center;">
                     <button class="btn-edit-bl" onclick="editBL('${bl.id}')" title="تعديل">
                         <i class="fas fa-pen"></i>
-                    </button>
-                    <button class="btn-whatsapp" onclick="shareBL('${bl.id}')" title="WhatsApp">
-                        <i class="fab fa-whatsapp"></i>
                     </button>
                     <button class="btn-print-a4" onclick="printBL('${bl.id}','a4')" title="A4">
                         <i class="fas fa-print"></i> A4
@@ -758,7 +927,7 @@ function populateSettings() {
 function changeLang(lang) {
     D.settings.lang = lang;
     document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
-    document.documentElement.lang = lang;
+    document.documentElement.lang = lang === 'ar' ? 'ar-MA' : lang;
     
     document.querySelectorAll('[data-' + lang + ']').forEach(el => {
         el.textContent = el.getAttribute('data-' + lang);
@@ -787,58 +956,68 @@ function refreshStats() {
     const blCount = (D.bl_list || []).length;
     const clientCount = (D.clients || []).length;
 
-    // Revenue from BLs
-    let totalRevenueBL = 0, totalM2 = 0;
+    // ── Revenue: BLs only (journal direct entries are already inside BLs or standalone)
+    let totalRevenue = 0, totalM2Sold = 0;
     (D.bl_list || []).forEach(bl => {
-        totalRevenueBL += bl.grand_total_ttc || 0;
-        totalM2 += bl.grand_total_m2 || 0;
+        totalRevenue += Number(bl.grand_total_ttc) || 0;
+        totalM2Sold += Number(bl.grand_total_m2) || 0;
     });
-    // Revenue from direct journal entries
-    let totalRevenueDirect = 0;
+    // Add standalone journal entries (source !== 'bl')
     (D.journal || []).forEach(j => {
-        totalRevenueDirect += j.total || (j.meters * j.price) || 0;
+        if (j.source !== 'bl') {
+            totalRevenue += Number(j.total) || (Number(j.meters) * Number(j.price)) || 0;
+            totalM2Sold += Number(j.meters) || 0;
+        }
     });
-    const totalRevenue = totalRevenueBL + totalRevenueDirect;
 
-    let totalPaid = 0;
-    (D.payments || []).forEach(p => { totalPaid += p.amount || 0; });
-
-    const totalDebt = totalRevenueBL - totalPaid;
+    // ── Client debt
+    let totalClientPaid = 0;
+    (D.payments || []).forEach(p => { totalClientPaid += Number(p.amount) || 0; });
+    const totalDebt = totalRevenue - totalClientPaid;
 
     document.getElementById('stat-bl-count').textContent = blCount;
     document.getElementById('stat-total-revenue').textContent = formatCurrency(totalRevenue);
-    document.getElementById('stat-total-m2').textContent = formatNumber(totalM2) + ' m²';
+    document.getElementById('stat-total-m2').textContent = formatNumber(totalM2Sold) + ' m²';
     document.getElementById('stat-client-count').textContent = clientCount;
-
     const debtEl = document.getElementById('stat-total-debt');
     if (debtEl) debtEl.textContent = formatCurrency(totalDebt);
 
-    // Total expenses (masarif + staff + fourn)
+    // ── Fixed charges (masarif + staff only — NOT fourn_payments which is supplier debt not expense)
     let totalMasarif = 0;
-    (D.masarif || []).forEach(m => { totalMasarif += m.amount || 0; });
+    (D.masarif || []).forEach(m => { totalMasarif += Number(m.amount) || 0; });
     let totalStaff = 0;
-    (D.staff || []).forEach(s => { totalStaff += s.amount || 0; });
-    let totalFournPaid = 0;
-    (D.fourn_payments || []).forEach(fp => { totalFournPaid += fp.amount || 0; });
-    const totalCharges = totalMasarif + totalStaff + totalFournPaid;
+    (D.staff || []).forEach(s => { totalStaff += Number(s.amount) || 0; });
+    const totalFixedCharges = totalMasarif + totalStaff;
 
     const masarifEl = document.getElementById('stat-total-masarif');
     if (masarifEl) masarifEl.textContent = formatCurrency(totalMasarif);
+    const chargesEl = document.getElementById('stat-total-charges');
+    if (chargesEl) chargesEl.textContent = formatCurrency(totalFixedCharges);
 
-    // P&L: Net Profit
-    const netProfit = totalRevenue - totalCharges;
+    // ── P&L: Net Profit = Revenue - COGS (cost of goods sold) - Fixed Charges
+    // COGS = avg purchase price * m² sold (not total stock purchased)
+    let totalPurchasedM2 = 0, totalPurchasedCost = 0;
+    (D.fourn_bls || []).forEach(b => {
+        (b.products || []).forEach(p => {
+            totalPurchasedM2 += Number(p.meters) || 0;
+            totalPurchasedCost += Number(p.total) || (Number(p.meters) * Number(p.price)) || 0;
+        });
+    });
+    const avgCostPerM2 = totalPurchasedM2 > 0 ? totalPurchasedCost / totalPurchasedM2 : 0;
+    const cogs = avgCostPerM2 * totalM2Sold; // cost of goods actually sold
+    const netProfit = totalRevenue - cogs - totalFixedCharges;
+
     const profitEl = document.getElementById('stat-net-profit');
     if (profitEl) {
         profitEl.textContent = formatCurrency(netProfit);
         profitEl.style.color = netProfit >= 0 ? 'var(--success)' : 'var(--danger)';
     }
-    const chargesEl = document.getElementById('stat-total-charges');
-    if (chargesEl) chargesEl.textContent = formatCurrency(totalCharges);
 
-    // Live Stock = m² purchased - m² sold
-    let stockIn = 0, stockOut = 0;
-    (D.fourn_bls || []).forEach(b => { (b.products || []).forEach(p => { stockIn += p.meters || 0; }); });
-    (D.bl_list || []).forEach(bl => { stockOut += bl.grand_total_m2 || 0; });
+    // ── Live Stock = m² purchased - m² sold
+    let stockIn = 0, stockOut = totalM2Sold;
+    (D.fourn_bls || []).forEach(b => {
+        (b.products || []).forEach(p => { stockIn += Number(p.meters) || 0; });
+    });
     const liveStockEl = document.getElementById('stat-live-stock');
     if (liveStockEl) liveStockEl.textContent = formatNumber(Math.max(0, stockIn - stockOut)) + ' m²';
 }
@@ -848,6 +1027,7 @@ function refreshAll() {
     populateJournal();
     refreshStats();
     if (document.getElementById('masarif-body')) populateMasarif();
+    if (document.getElementById('stock-products-list')) populateStockTab();
 }
 
 
@@ -969,28 +1149,69 @@ function exportMasarif() {
 }
 
 // ============ FOURNISSEURS ============
+function fournNewProductRowHTML(removable) {
+    return `
+    <div class="fourn-new-prod-row">
+        <input type="text" placeholder="نوع الرخام" class="fourn-new-prod-name" required>
+        <input type="text" inputmode="decimal" data-numeric placeholder="الكمية" class="fourn-new-prod-qty" oninput="calcNewFournisseurRow(this)">
+        <input type="text" inputmode="decimal" data-numeric placeholder="م²" class="fourn-new-prod-meters" oninput="calcNewFournisseurRow(this)">
+        <input type="text" inputmode="decimal" data-numeric placeholder="الثمن" class="fourn-new-prod-price" oninput="calcNewFournisseurRow(this)" required>
+        <span class="fourn-new-prod-total" style="font-weight:700;color:var(--success);font-size:0.88rem;text-align:center;">0.00</span>
+        ${removable ? `
+            <button type="button" class="btn-remove-row" onclick="removeNewFournisseurRow(this)" title="حذف">
+                <i class="fas fa-times"></i>
+            </button>
+        ` : '<span style="width:32px;display:inline-block;"></span>'}
+    </div>`;
+}
+
 function openNewFournisseur() {
     document.getElementById('fournisseur-modal').style.display = 'flex';
     document.getElementById('fournisseur-form').reset();
     document.getElementById('fourn-payment-default').value = 'espece';
     document.getElementById('fourn-pay-cash').classList.add('active');
     document.getElementById('fourn-pay-check').classList.remove('active');
-    document.getElementById('fourn-marble-types-list').innerHTML = `
-        <div class="fourn-marble-type-row">
-            <input type="text" class="fourn-marble-type-input" placeholder="مثال: galax, emperador...">
-        </div>`;
+    document.getElementById('fourn-new-products-list').innerHTML = fournNewProductRowHTML(false);
+    // Attach sanitizers after HTML injection
+    document.querySelectorAll('#fourn-new-products-list input[data-numeric]').forEach(attachNumericSanitizer);
+    document.getElementById('fourn-new-grand-total').textContent = '0.00 DH';
 }
 
-function addMarbleTypeRow() {
-    const container = document.getElementById('fourn-marble-types-list');
-    const row = document.createElement('div');
-    row.className = 'fourn-marble-type-row';
-    row.innerHTML = `
-        <input type="text" class="fourn-marble-type-input" placeholder="نوع آخر...">
-        <button type="button" class="btn-remove-row" onclick="this.closest('.fourn-marble-type-row').remove()">
-            <i class="fas fa-times"></i>
-        </button>`;
-    container.appendChild(row);
+function addNewFournisseurRow() {
+    const container = document.getElementById('fourn-new-products-list');
+    const div = document.createElement('div');
+    div.innerHTML = fournNewProductRowHTML(true);
+    const newRow = div.firstElementChild;
+    container.appendChild(newRow);
+    // Attach sanitizers to freshly added row
+    newRow.querySelectorAll('input[data-numeric]').forEach(attachNumericSanitizer);
+}
+
+function removeNewFournisseurRow(btn) {
+    btn.closest('.fourn-new-prod-row').remove();
+    calcNewFournisseurGrand();
+}
+
+function calcNewFournisseurRow(input) {
+    const row = input.closest('.fourn-new-prod-row');
+    const qty = parseFloat(row.querySelector('.fourn-new-prod-qty').value) || 0;
+    const meters = parseFloat(row.querySelector('.fourn-new-prod-meters').value) || 0;
+    const price = parseFloat(row.querySelector('.fourn-new-prod-price').value) || 0;
+    const factor = meters > 0 ? meters : qty;
+    row.querySelector('.fourn-new-prod-total').textContent = formatNumber(factor * price);
+    calcNewFournisseurGrand();
+}
+
+function calcNewFournisseurGrand() {
+    let grand = 0;
+    document.querySelectorAll('#fourn-new-products-list .fourn-new-prod-row').forEach(row => {
+        const qty = parseFloat(row.querySelector('.fourn-new-prod-qty').value) || 0;
+        const meters = parseFloat(row.querySelector('.fourn-new-prod-meters').value) || 0;
+        const price = parseFloat(row.querySelector('.fourn-new-prod-price').value) || 0;
+        const factor = meters > 0 ? meters : qty;
+        grand += factor * price;
+    });
+    document.getElementById('fourn-new-grand-total').textContent = formatCurrency(grand);
 }
 
 function closeFournisseurModal() {
@@ -1005,20 +1226,88 @@ function selectFournisseurPayment(method) {
 
 function saveFournisseur(e) {
     e.preventDefault();
-    const marbleTypes = [...document.querySelectorAll('.fourn-marble-type-input')]
-        .map(i => i.value.trim()).filter(v => v);
+    
+    // Validate inputs
+    let valid = true;
+    document.querySelectorAll('#fourn-new-products-list .fourn-new-prod-row').forEach(row => {
+        const name = row.querySelector('.fourn-new-prod-name').value.trim();
+        const qty = parseFloat(row.querySelector('.fourn-new-prod-qty').value) || 0;
+        const meters = parseFloat(row.querySelector('.fourn-new-prod-meters').value) || 0;
+        const price = parseFloat(row.querySelector('.fourn-new-prod-price').value) || 0;
+
+        if (name) {
+            if (qty <= 0 && meters <= 0) {
+                alert('يرجى إدخال الكمية أو المساحة (م²) لكل منتج');
+                valid = false;
+            }
+            if (price <= 0) {
+                alert('يرجى إدخال ثمن الوحدة لكل منتج');
+                valid = false;
+            }
+        }
+    });
+    if (!valid) return;
+
+    const name = document.getElementById('fourn-name').value;
+    const phone = document.getElementById('fourn-phone').value;
+    const paymentDefault = document.getElementById('fourn-payment-default').value;
+    const note = document.getElementById('fourn-note').value;
+
+    const products = [];
+    let grandTotal = 0;
+    const marbleTypes = [];
+
+    document.querySelectorAll('#fourn-new-products-list .fourn-new-prod-row').forEach(row => {
+        const prodName = row.querySelector('.fourn-new-prod-name').value.trim();
+        const qty = parseFloat(row.querySelector('.fourn-new-prod-qty').value) || 0;
+        const meters = parseFloat(row.querySelector('.fourn-new-prod-meters').value) || 0;
+        const price = parseFloat(row.querySelector('.fourn-new-prod-price').value) || 0;
+
+        if (prodName && (qty > 0 || meters > 0)) {
+            const factor = meters > 0 ? meters : qty;
+            const total = factor * price;
+            products.push({
+                name: prodName,
+                qty: qty,
+                meters: meters,
+                price: price,
+                total: total
+            });
+            grandTotal += total;
+            if (!marbleTypes.includes(prodName)) {
+                marbleTypes.push(prodName);
+            }
+        }
+    });
+
+    const supplierId = generateId();
+
     if (!D.fournisseurs) D.fournisseurs = [];
     D.fournisseurs.push({
-        id: generateId(),
-        name: document.getElementById('fourn-name').value,
-        phone: document.getElementById('fourn-phone').value,
+        id: supplierId,
+        name: name,
+        phone: phone,
         marble_types: marbleTypes,
-        payment_default: document.getElementById('fourn-payment-default').value,
-        note: document.getElementById('fourn-note').value
+        payment_default: paymentDefault,
+        note: note
     });
+
+    // Automatically record initial receipt/purchase if products are entered!
+    if (products.length > 0) {
+        if (!D.fourn_bls) D.fourn_bls = [];
+        D.fourn_bls.push({
+            id: generateId(),
+            fournisseur_id: supplierId,
+            date: new Date().toISOString().split('T')[0],
+            products: products,
+            grand_total: grandTotal
+        });
+    }
+
     save();
     closeFournisseurModal();
     populateFournisseurList();
+    refreshStats(); // Immediately recalculates live stock & totals on the dashboard!
 }
 
 function deleteFournisseur(id) {
@@ -1097,6 +1386,7 @@ function populateFournisseurList() {
                             <tr style="background:#e2e8f0;">
                                 <th style="padding:3px 6px;text-align:right;border-radius:4px 0 0 4px;">النوع</th>
                                 <th style="padding:3px 6px;text-align:center;">الكمية</th>
+                                <th style="padding:3px 6px;text-align:center;">م²</th>
                                 <th style="padding:3px 6px;text-align:center;">الثمن</th>
                                 <th style="padding:3px 6px;text-align:center;border-radius:0 4px 4px 0;">المجموع</th>
                             </tr>
@@ -1105,6 +1395,7 @@ function populateFournisseurList() {
                             ${(b.products || []).map(p => `
                             <tr style="border-bottom:1px dashed #e2e8f0;">
                                 <td style="padding:3px 6px;font-weight:600;">${p.name}</td>
+                                <td style="padding:3px 6px;text-align:center;" dir="ltr">${p.qty ? formatNumber(p.qty) : '-'}</td>
                                 <td style="padding:3px 6px;text-align:center;" dir="ltr">${formatNumber(p.meters)} m²</td>
                                 <td style="padding:3px 6px;text-align:center;" dir="ltr">${formatNumber(p.price)}</td>
                                 <td style="padding:3px 6px;text-align:center;font-weight:700;color:var(--success);" dir="ltr">${formatCurrency(p.total)}</td>
@@ -1153,8 +1444,9 @@ function populateFournisseurList() {
 function fournProductRowHTML(removable) {
     return `<div class="fourn-prod-row">
         <input type="text" placeholder="نوع الرخام" class="fourn-prod-name">
-        <input type="number" step="0.01" placeholder="م²" class="fourn-prod-meters" oninput="calcFournRow(this)" lang="fr">
-        <input type="number" step="0.01" placeholder="الثمن" class="fourn-prod-price" oninput="calcFournRow(this)" lang="fr">
+        <input type="text" inputmode="decimal" data-numeric placeholder="الكمية" class="fourn-prod-qty" oninput="calcFournRow(this)">
+        <input type="text" inputmode="decimal" data-numeric placeholder="م²" class="fourn-prod-meters" oninput="calcFournRow(this)">
+        <input type="text" inputmode="decimal" data-numeric placeholder="الثمن" class="fourn-prod-price" oninput="calcFournRow(this)">
         <span class="fourn-prod-total">0.00</span>
         ${removable ? `<button type="button" class="btn-remove-row" onclick="removeFournRow(this)" title="حذف"><i class="fas fa-times"></i></button>` : '<span style="width:22px;display:inline-block;"></span>'}
     </div>`;
@@ -1166,6 +1458,8 @@ function openFournBLModal(fournId, fournName) {
     document.getElementById('fourn-bl-fournisseur-name').value = fournName;
     document.getElementById('fourn-bl-date').value = new Date().toISOString().split('T')[0];
     document.getElementById('fourn-bl-products').innerHTML = fournProductRowHTML(false);
+    // Attach sanitizers after HTML injection
+    document.querySelectorAll('#fourn-bl-products input[data-numeric]').forEach(attachNumericSanitizer);
     document.getElementById('fourn-bl-grand-total').textContent = '0.00';
 }
 
@@ -1177,7 +1471,10 @@ function addFournProductRow() {
     const container = document.getElementById('fourn-bl-products');
     const div = document.createElement('div');
     div.innerHTML = fournProductRowHTML(true);
-    container.appendChild(div.firstElementChild);
+    const newRow = div.firstElementChild;
+    container.appendChild(newRow);
+    // Attach sanitizers to freshly added row
+    newRow.querySelectorAll('input[data-numeric]').forEach(attachNumericSanitizer);
 }
 
 function removeFournRow(btn) {
@@ -1198,9 +1495,11 @@ function calcFournGrand() {
 
 function calcFournRow(input) {
     const row = input.closest('.fourn-prod-row');
+    const qty = parseFloat(row.querySelector('.fourn-prod-qty').value) || 0;
     const meters = parseFloat(row.querySelector('.fourn-prod-meters').value) || 0;
     const price = parseFloat(row.querySelector('.fourn-prod-price').value) || 0;
-    row.querySelector('.fourn-prod-total').textContent = formatNumber(meters * price);
+    const factor = meters > 0 ? meters : (qty > 0 ? qty : 0);
+    row.querySelector('.fourn-prod-total').textContent = formatNumber(factor * price);
     calcFournGrand();
 }
 
@@ -1213,11 +1512,13 @@ function saveFournBL(e) {
 
     document.querySelectorAll('#fourn-bl-products .fourn-prod-row').forEach(row => {
         const name = row.querySelector('.fourn-prod-name').value;
+        const qty = parseFloat(row.querySelector('.fourn-prod-qty').value) || 0;
         const meters = parseFloat(row.querySelector('.fourn-prod-meters').value) || 0;
         const price = parseFloat(row.querySelector('.fourn-prod-price').value) || 0;
-        if (name && meters > 0) {
-            const total = meters * price;
-            products.push({ name, meters, price, total });
+        if (name && (meters > 0 || qty > 0)) {
+            const factor = meters > 0 ? meters : (qty > 0 ? qty : 0);
+            const total = factor * price;
+            products.push({ name, qty, meters, price, total });
             grandTotal += total;
         }
     });
@@ -1291,7 +1592,7 @@ function printBL(id, format) {
             <td>${formatCurrency(p.total_ttc)}</td>
         </tr>`).join('');
 
-    const html = `<!DOCTYPE html><html dir="rtl" lang="ar"><head>
+    const html = `<!DOCTYPE html><html dir="rtl" lang="ar-MA"><head>
         <meta charset="UTF-8">
         <title>وصل التسليم</title>
         <style>
@@ -1306,7 +1607,7 @@ function printBL(id, format) {
             td { padding:${isA4 ? '7px' : '3px 4px'}; text-align:center; border-bottom:1px solid #ddd; font-size:${isA4 ? '12px' : '10px'}; }
             .total { text-align:left; margin-top:${isA4 ? '12px' : '6px'}; font-size:${isA4 ? '15px' : '12px'}; font-weight:700; border-top:2px solid #333; padding-top:6px; }
             .footer { text-align:center; margin-top:${isA4 ? '20px' : '10px'}; font-size:${isA4 ? '11px' : '9px'}; color:#888; border-top:1px dashed #ccc; padding-top:6px; }
-            ${isA4 ? '.signature { display:flex; justify-content:space-between; margin-top:40px; } .sig-box { text-align:center; } .sig-line { border-top:1px solid #333; width:120px; margin:0 auto; padding-top:4px; font-size:11px; color:#555; }' : ''}
+            ${isA4 ? '' : ''}
         </style>
     </head><body>
         <div class="header">
@@ -1323,7 +1624,7 @@ function printBL(id, format) {
             <tbody>${rows}</tbody>
         </table>
         <div class="total">المجموع الكلي: ${formatCurrency(bl.grand_total_ttc)}</div>
-        ${isA4 ? `<div class="signature"><div class="sig-box"><div class="sig-line">توقيع المورد</div></div><div class="sig-box"><div class="sig-line">توقيع العميل</div></div></div>` : ''}
+
         <div class="footer">شكراً على ثقتكم</div>
     </body></html>`;
 
@@ -1333,10 +1634,749 @@ function printBL(id, format) {
     win.onload = () => { win.print(); };
 }
 
+// ============ DUMMY DATA GENERATION ============
+function fillDummyData() {
+    if (!confirm(D.settings.lang === 'ar' ? 'هل أنت متأكد من تعبئة البيانات التجريبية؟ سيؤدي ذلك إلى ملء التطبيق ببيانات وهمية جميلة لتصوير الفيديو.' : 'Êtes-vous sûr de vouloir remplir les données d\'essai ? Cela remplira l\'application avec de belles données fictives pour l\'enregistrement de votre vidéo.')) return;
+    
+    // Generate unique IDs for mock entries
+    const mock_clients = [
+        { id: generateId(), name: "Mounir El Alami", phone: "0661234567", address: "Rabat" },
+        { id: generateId(), name: "Youssef Amrani", phone: "0662345678", address: "Casablanca" },
+        { id: generateId(), name: "Karim Bensalah", phone: "0663456789", address: "Marrakech" },
+        { id: generateId(), name: "Mostafa Belfakir", phone: "0664567890", address: "Agadir" }
+    ];
+
+    const mock_bl_list = [
+        {
+            id: generateId(),
+            client: "Mounir El Alami",
+            date: "2026-05-01",
+            products: [
+                { id: generateId(), name: "Crema Marfil", pu: 350, total_m2: 45, total_tr: 1, total_ttc: 15750, measurements: [{ id: generateId(), length: 45, width: 1, tr: 1 }] },
+                { id: generateId(), name: "Nero Marquina", pu: 450, total_m2: 20, total_tr: 1, total_ttc: 9000, measurements: [{ id: generateId(), length: 20, width: 1, tr: 1 }] }
+            ],
+            grand_total_m2: 65,
+            grand_total_tr: 2,
+            grand_total_ttc: 24750
+        },
+        {
+            id: generateId(),
+            client: "Youssef Amrani",
+            date: "2026-05-04",
+            products: [
+                { id: generateId(), name: "Carrara Bianco", pu: 600, total_m2: 30, total_tr: 1, total_ttc: 18000, measurements: [{ id: generateId(), length: 30, width: 1, tr: 1 }] }
+            ],
+            grand_total_m2: 30,
+            grand_total_tr: 1,
+            grand_total_ttc: 18000
+        },
+        {
+            id: generateId(),
+            client: "Karim Bensalah",
+            date: "2026-05-07",
+            products: [
+                { id: generateId(), name: "Emperador Dark", pu: 380, total_m2: 50, total_tr: 1, total_ttc: 19000, measurements: [{ id: generateId(), length: 50, width: 1, tr: 1 }] },
+                { id: generateId(), name: "Atlas Grey", pu: 280, total_m2: 80, total_tr: 1, total_ttc: 22400, measurements: [{ id: generateId(), length: 80, width: 1, tr: 1 }] }
+            ],
+            grand_total_m2: 130,
+            grand_total_tr: 2,
+            grand_total_ttc: 41400
+        }
+    ];
+
+    const mock_payments = [
+        { id: generateId(), clientName: "Mounir El Alami", amount: 15000, method: "espece", date: "2026-05-02" },
+        { id: generateId(), clientName: "Youssef Amrani", amount: 18000, method: "cheque", date: "2026-05-05" },
+        { id: generateId(), clientName: "Karim Bensalah", amount: 20000, method: "espece", date: "2026-05-08" }
+    ];
+
+    const mock_masarif = [
+        { id: generateId(), type: "كراء المستودع", amount: 5000, payment: "cheque", note: "كراء شهر ماي", date: "2026-05-01" },
+        { id: generateId(), type: "كهرباء ومكتب", amount: 850, payment: "espece", note: "فاتورة المكتب والمخزن", date: "2026-05-03" },
+        { id: generateId(), type: "شحن ونقل الرخام", amount: 1200, payment: "espece", note: "توصيل سلعة الرباط", date: "2026-05-05" },
+        { id: generateId(), type: "إصلاح آلات التقطيع", amount: 1500, payment: "espece", note: "صيانة دورية", date: "2026-05-06" }
+    ];
+
+    const mock_staff = [
+        { id: generateId(), name: "عبد الرحيم", amount: 2500, note: "أسبوعية العمل", date: "2026-05-07" },
+        { id: generateId(), name: "هشام", amount: 2200, note: "أسبوعية العمل والتقطيع", date: "2026-05-07" },
+        { id: generateId(), name: "رشيد", amount: 1800, note: "مساعد شحن", date: "2026-05-07" }
+    ];
+
+    const mock_fournisseurs = [
+        { id: "supplier_atlas", name: "Société Atlas Marbre", phone: "0522112233", marble_types: ["Crema Marfil", "Atlas Grey"], payment_default: "cheque", note: "المورد الرئيسي للرخام المحلي" },
+        { id: "supplier_carrara", name: "Importations Carrara", phone: "0522445566", marble_types: ["Carrara Bianco"], payment_default: "cheque", note: "رخام إيطالي مستورد" }
+    ];
+
+    const mock_fourn_bls = [
+        {
+            id: generateId(),
+            fournisseur_id: "supplier_atlas",
+            date: "2026-04-25",
+            products: [
+                { name: "Crema Marfil", qty: 200, meters: 150, price: 180, total: 27000 },
+                { name: "Atlas Grey", qty: 150, meters: 120, price: 130, total: 15600 }
+            ],
+            grand_total: 42600
+        },
+        {
+            id: generateId(),
+            fournisseur_id: "supplier_carrara",
+            date: "2026-04-28",
+            products: [
+                { name: "Carrara Bianco", qty: 100, meters: 80, price: 320, total: 25600 }
+            ],
+            grand_total: 25600
+        }
+    ];
+
+    const mock_fourn_payments = [
+        { id: generateId(), fournisseur_id: "supplier_atlas", amount: 30000, method: "cheque", date: "2026-04-26" },
+        { id: generateId(), fournisseur_id: "supplier_carrara", amount: 20000, method: "cheque", date: "2026-04-29" }
+    ];
+
+    const mock_journal = [
+        { id: generateId(), type: "Nero Marquina", meters: 8, price: 420, total: 3360, payment: "espece", date: "2026-05-08", source: "direct" },
+        { id: generateId(), type: "Emperador Dark", meters: 12, price: 370, total: 4440, payment: "espece", date: "2026-05-09", source: "direct" }
+    ];
+
+    D.clients = mock_clients;
+    D.bl_list = mock_bl_list;
+    D.payments = mock_payments;
+    D.masarif = mock_masarif;
+    D.staff = mock_staff;
+    D.fournisseurs = mock_fournisseurs;
+    D.fourn_bls = mock_fourn_bls;
+    D.fourn_payments = mock_fourn_payments;
+    D.journal = mock_journal;
+
+    save();
+    
+    // Refresh all views
+    refreshAll();
+    populateBLList();
+    populateClientsList();
+    populateStaffList();
+    populateFournisseurList();
+
+    alert(D.settings.lang === 'ar' ? 'تمت تعبئة البيانات التجريبية بنجاح!' : 'Données d\'essai remplies avec succès !');
+}
+
+function clearAllData() {
+    if (!confirm(D.settings.lang === 'ar' ? 'هل أنت متأكد من مسح جميع البيانات؟ سيؤدي ذلك إلى تصفير البرنامج بالكامل وحذف كل العمليات والعملاء والموردين بشكل نهائي.' : 'Êtes-vous sûr de vouloir tout effacer ? Cela réinitialisera complètement l\'application.')) return;
+    
+    D.clients = [];
+    D.bl_list = [];
+    D.payments = [];
+    D.masarif = [];
+    D.staff = [];
+    D.fournisseurs = [];
+    D.fourn_bls = [];
+    D.fourn_payments = [];
+    D.journal = [];
+    D.products = [];
+    D.stock_sales = [];
+
+    save();
+
+    // Refresh all views
+    refreshAll();
+    populateBLList();
+    populateClientsList();
+    populateStaffList();
+    populateFournisseurList();
+    populateStockTab();
+
+    alert(D.settings.lang === 'ar' ? 'تم تصفير جميع البيانات بنجاح!' : 'Toutes les données ont été réinitialisées avec succès !');
+}
+
+// ============ STOCK MANAGEMENT MODULE ============
+
+const LOW_STOCK_DEFAULT = 5;
+
+// Preview product image before upload
+function previewProductImage(input) {
+    const preview = document.getElementById('product-image-preview');
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            preview.innerHTML = `<img src="${e.target.result}" alt="معاينة">`;
+        };
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+
+function openProductModal(editId) {
+    const modal = document.getElementById('product-modal');
+    modal.style.display = 'flex';
+    document.getElementById('product-form').reset();
+    document.getElementById('product-edit-id').value = '';
+    document.getElementById('product-image-preview').innerHTML = '<i class="fas fa-camera"></i><span>اختر صورة</span>';
+
+    // Attach sanitizers
+    ['product-cost', 'product-sell', 'product-qty', 'product-threshold'].forEach(id => {
+        attachNumericSanitizer(document.getElementById(id));
+    });
+
+    if (editId) {
+        const product = (D.products || []).find(p => p.id === editId);
+        if (product) {
+            document.getElementById('product-modal-title').textContent = 'تعديل المنتج';
+            document.getElementById('product-edit-id').value = editId;
+            document.getElementById('product-name').value = product.name || '';
+            document.getElementById('product-cost').value = product.cost || '';
+            document.getElementById('product-sell').value = product.sell || '';
+            document.getElementById('product-qty').value = product.qty || '';
+            document.getElementById('product-threshold').value = product.threshold || LOW_STOCK_DEFAULT;
+            if (product.image) {
+                document.getElementById('product-image-preview').innerHTML = `<img src="${product.image}" alt="صورة المنتج">`;
+            }
+        }
+    } else {
+        document.getElementById('product-modal-title').textContent = 'منتج جديد';
+    }
+}
+
+function closeProductModal() {
+    document.getElementById('product-modal').style.display = 'none';
+}
+
+let _productSubmitting = false;
+function saveProduct(e) {
+    e.preventDefault();
+    if (_productSubmitting) return;
+    _productSubmitting = true;
+
+    const editId = document.getElementById('product-edit-id').value;
+    const name = document.getElementById('product-name').value.trim();
+    const cost = parseFloat(document.getElementById('product-cost').value) || 0;
+    const sell = parseFloat(document.getElementById('product-sell').value) || 0;
+    const qty = parseFloat(document.getElementById('product-qty').value) || 0;
+    const threshold = parseFloat(document.getElementById('product-threshold').value) || LOW_STOCK_DEFAULT;
+
+    if (!D.products) D.products = [];
+
+    // Get image as base64 (if a new one was selected)
+    const fileInput = document.getElementById('product-image');
+    const previewImg = document.querySelector('#product-image-preview img');
+
+    const finalizeSave = (imageData) => {
+        if (editId) {
+            const idx = D.products.findIndex(p => p.id === editId);
+            if (idx !== -1) {
+                D.products[idx].name = name;
+                D.products[idx].cost = cost;
+                D.products[idx].sell = sell;
+                D.products[idx].qty = qty;
+                D.products[idx].threshold = threshold;
+                if (imageData) D.products[idx].image = imageData;
+            }
+        } else {
+            D.products.push({
+                id: generateId(),
+                name, cost, sell, qty, threshold,
+                image: imageData || '',
+                created: new Date().toISOString().split('T')[0]
+            });
+        }
+
+        save();
+        closeProductModal();
+        populateStockTab();
+        refreshStats();
+        _productSubmitting = false;
+        alert(D.settings.lang === 'ar' ? 'تم حفظ المنتج!' : 'Produit enregistré !');
+    };
+
+    // If there's a new file, read it
+    if (fileInput.files && fileInput.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            // Compress image to keep data size reasonable
+            const img = new Image();
+            img.onload = function() {
+                const canvas = document.createElement('canvas');
+                const maxW = 400, maxH = 400;
+                let w = img.width, h = img.height;
+                if (w > maxW) { h = (h * maxW) / w; w = maxW; }
+                if (h > maxH) { w = (w * maxH) / h; h = maxH; }
+                canvas.width = w;
+                canvas.height = h;
+                canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                const compressed = canvas.toDataURL('image/jpeg', 0.7);
+                finalizeSave(compressed);
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(fileInput.files[0]);
+    } else {
+        // Keep existing image if editing
+        const existingImage = previewImg ? previewImg.src : '';
+        finalizeSave(editId ? null : existingImage);
+    }
+}
+
+function deleteProduct(id) {
+    if (!confirm('هل تريد حذف هذا المنتج؟')) return;
+    D.products = (D.products || []).filter(p => p.id !== id);
+    save();
+    populateStockTab();
+    refreshStats();
+}
+
+// ===== STOCK TAB POPULATION =====
+function populateStockTab() {
+    if (!D.products) D.products = [];
+    if (!D.stock_sales) D.stock_sales = [];
+
+    const container = document.getElementById('stock-products-list');
+    const alertsContainer = document.getElementById('stock-alerts-container');
+
+    // Calculate summary
+    let totalProducts = D.products.length;
+    let totalSellValue = 0;
+    let totalCostValue = 0;
+    let lowStockProducts = [];
+
+    D.products.forEach(p => {
+        totalSellValue += (p.sell || 0) * (p.qty || 0);
+        totalCostValue += (p.cost || 0) * (p.qty || 0);
+        const threshold = p.threshold || LOW_STOCK_DEFAULT;
+        if ((p.qty || 0) <= threshold) {
+            lowStockProducts.push(p);
+        }
+    });
+
+    // Update summary cards
+    document.getElementById('stock-total-products').textContent = totalProducts;
+    document.getElementById('stock-total-value').textContent = formatCurrency(totalSellValue);
+    document.getElementById('stock-cost-value').textContent = formatCurrency(totalCostValue);
+    document.getElementById('stock-low-count').textContent = lowStockProducts.length;
+
+    // Low stock alerts
+    if (lowStockProducts.length > 0) {
+        alertsContainer.style.display = 'block';
+        alertsContainer.innerHTML = `
+            <div class="stock-alerts-bar">
+                <div class="alert-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                <div>
+                    <div class="alert-text">⚠️ تنبيه: ${lowStockProducts.length} منتج(ات) بكمية منخفضة!</div>
+                    <div class="alert-items">
+                        ${lowStockProducts.map(p => `
+                            <span class="alert-chip">${p.name} (${formatNumber(p.qty || 0, 0)})</span>
+                        `).join('')}
+                    </div>
+                </div>
+            </div>`;
+    } else {
+        alertsContainer.style.display = 'none';
+    }
+
+    // Products grid
+    if (D.products.length === 0) {
+        container.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:40px;grid-column:1/-1;">لا توجد منتجات بعد. أضف منتجك الأول!</p>';
+        return;
+    }
+
+    container.innerHTML = D.products.map(p => {
+        const qty = p.qty || 0;
+        const threshold = p.threshold || LOW_STOCK_DEFAULT;
+        let badgeClass = 'stock-badge-ok';
+        let badgeText = 'متوفر';
+        let badgeIcon = 'check-circle';
+
+        if (qty <= 0) {
+            badgeClass = 'stock-badge-out';
+            badgeText = 'نفذ';
+            badgeIcon = 'times-circle';
+        } else if (qty <= threshold) {
+            badgeClass = 'stock-badge-low';
+            badgeText = 'كمية منخفضة';
+            badgeIcon = 'exclamation-triangle';
+        }
+
+        const totalValue = (p.sell || 0) * qty;
+        const profit = ((p.sell || 0) - (p.cost || 0)) * qty;
+
+        return `
+        <div class="stock-product-card">
+            ${p.image
+                ? `<img src="${p.image}" class="stock-product-image" alt="${p.name}">`
+                : `<div class="stock-product-image-placeholder"><i class="fas fa-layer-group"></i></div>`
+            }
+            <div class="stock-product-body">
+                <div class="stock-product-name">${p.name}</div>
+                <div class="stock-product-prices">
+                    <div>
+                        <span class="price-label">سعر الشراء</span>
+                        <span class="price-cost" dir="ltr">${formatCurrency(p.cost)}</span>
+                    </div>
+                    <div>
+                        <span class="price-label">سعر البيع</span>
+                        <span class="price-sell" dir="ltr">${formatCurrency(p.sell)}</span>
+                    </div>
+                </div>
+                <div class="stock-product-qty-bar">
+                    <span class="stock-product-qty">${formatNumber(qty, 0)}</span>
+                    <span class="stock-badge ${badgeClass}">
+                        <i class="fas fa-${badgeIcon}"></i> ${badgeText}
+                    </span>
+                </div>
+                <div class="stock-product-value">
+                    <span>قيمة المخزون: <strong dir="ltr">${formatCurrency(totalValue)}</strong></span>
+                    <span>هامش الربح: <strong style="color:${profit >= 0 ? 'var(--success)' : 'var(--danger)'};" dir="ltr">${formatCurrency(profit)}</strong></span>
+                </div>
+                <div class="stock-product-actions">
+                    <button class="btn btn-primary btn-sm" onclick="openProductModal('${p.id}')">
+                        <i class="fas fa-pen"></i> تعديل
+                    </button>
+                    <button class="btn btn-danger btn-sm" onclick="deleteProduct('${p.id}')">
+                        <i class="fas fa-trash"></i> حذف
+                    </button>
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+// ===== STOCK SALE =====
+function openStockSaleModal() {
+    document.getElementById('stock-sale-modal').style.display = 'flex';
+    document.getElementById('stock-sale-form').reset();
+    document.getElementById('stock-sale-total').value = '';
+    document.getElementById('stock-sale-profit').value = '';
+    document.getElementById('stock-sale-info').style.display = 'none';
+    document.getElementById('stock-sale-payment').value = 'espece';
+    document.getElementById('ss-cash').classList.add('active');
+    document.getElementById('ss-check').classList.remove('active');
+
+    // Populate product select
+    const select = document.getElementById('stock-sale-product');
+    select.innerHTML = '<option value="">-- اختر المنتج --</option>';
+    (D.products || []).forEach(p => {
+        if ((p.qty || 0) > 0) {
+            select.innerHTML += `<option value="${p.id}">${p.name} (${formatNumber(p.qty, 0)} متوفر)</option>`;
+        }
+    });
+
+    // Attach sanitizer
+    attachNumericSanitizer(document.getElementById('stock-sale-qty'));
+}
+
+function closeStockSaleModal() {
+    document.getElementById('stock-sale-modal').style.display = 'none';
+}
+
+function onStockSaleProductChange() {
+    const productId = document.getElementById('stock-sale-product').value;
+    const infoBar = document.getElementById('stock-sale-info');
+
+    if (!productId) {
+        infoBar.style.display = 'none';
+        return;
+    }
+
+    const product = (D.products || []).find(p => p.id === productId);
+    if (!product) return;
+
+    infoBar.style.display = 'block';
+    document.getElementById('stock-sale-available').textContent = formatNumber(product.qty || 0, 0);
+    document.getElementById('stock-sale-unit-price').textContent = formatCurrency(product.sell);
+    document.getElementById('stock-sale-cost-price').textContent = formatCurrency(product.cost);
+
+    calcStockSaleTotal();
+}
+
+function calcStockSaleTotal() {
+    const productId = document.getElementById('stock-sale-product').value;
+    const qty = parseFloat(document.getElementById('stock-sale-qty').value) || 0;
+
+    if (!productId) return;
+
+    const product = (D.products || []).find(p => p.id === productId);
+    if (!product) return;
+
+    const total = qty * (product.sell || 0);
+    const profit = qty * ((product.sell || 0) - (product.cost || 0));
+
+    document.getElementById('stock-sale-total').value = formatCurrency(total);
+    document.getElementById('stock-sale-profit').value = formatCurrency(profit);
+}
+
+function selectStockSalePayment(method) {
+    document.getElementById('stock-sale-payment').value = method;
+    document.getElementById('ss-cash').classList.toggle('active', method === 'espece');
+    document.getElementById('ss-check').classList.toggle('active', method === 'cheque');
+}
+
+let _stockSaleSubmitting = false;
+function saveStockSale(e) {
+    e.preventDefault();
+    if (_stockSaleSubmitting) return;
+    _stockSaleSubmitting = true;
+
+    const productId = document.getElementById('stock-sale-product').value;
+    const qty = parseFloat(document.getElementById('stock-sale-qty').value) || 0;
+    const payment = document.getElementById('stock-sale-payment').value;
+
+    if (!productId) {
+        alert('يرجى اختيار منتج');
+        _stockSaleSubmitting = false;
+        return;
+    }
+
+    const product = (D.products || []).find(p => p.id === productId);
+    if (!product) {
+        alert('المنتج غير موجود');
+        _stockSaleSubmitting = false;
+        return;
+    }
+
+    if (qty <= 0) {
+        alert('يرجى إدخال كمية صحيحة');
+        _stockSaleSubmitting = false;
+        return;
+    }
+
+    if (qty > (product.qty || 0)) {
+        alert(`الكمية المطلوبة (${qty}) أكبر من المتوفر (${product.qty || 0})`);
+        _stockSaleSubmitting = false;
+        return;
+    }
+
+    // Deduct from stock
+    product.qty = (product.qty || 0) - qty;
+
+    // Record the sale
+    if (!D.stock_sales) D.stock_sales = [];
+    D.stock_sales.push({
+        id: generateId(),
+        product_id: productId,
+        product_name: product.name,
+        qty: qty,
+        sell_price: product.sell || 0,
+        cost_price: product.cost || 0,
+        total: qty * (product.sell || 0),
+        profit: qty * ((product.sell || 0) - (product.cost || 0)),
+        payment: payment,
+        date: new Date().toISOString().split('T')[0]
+    });
+
+    // Also add to journal for unified tracking
+    if (!D.journal) D.journal = [];
+    D.journal.push({
+        id: generateId(),
+        type: product.name + ' (مخزون)',
+        meters: qty,
+        price: product.sell || 0,
+        total: qty * (product.sell || 0),
+        payment: payment,
+        date: new Date().toISOString().split('T')[0],
+        source: 'stock'
+    });
+
+    save();
+    closeStockSaleModal();
+    refreshAll();
+    _stockSaleSubmitting = false;
+
+    // Low stock notification after sale
+    const threshold = product.threshold || LOW_STOCK_DEFAULT;
+    if (product.qty <= threshold && product.qty > 0) {
+        alert(`⚠️ تنبيه: المنتج "${product.name}" أصبح بكمية منخفضة (${product.qty} متبقي)`);
+    } else if (product.qty <= 0) {
+        alert(`🔴 المنتج "${product.name}" نفذ من المخزون!`);
+    } else {
+        alert('تم تسجيل البيع بنجاح!');
+    }
+}
+
+// ===== STOCK PDF REPORT =====
+function exportStockPDF() {
+    const { jsPDF } = window.jspdf;
+    if (!jsPDF) {
+        alert('جاري تحميل مكتبة التقارير... أعد المحاولة.');
+        return;
+    }
+
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const company = D.settings.company || {};
+    const today = new Date().toLocaleDateString('fr-FR');
+
+    // Header
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'bold');
+    doc.text(company.name || 'Rkham System', 105, 20, { align: 'center' });
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Stock Report / Rapport de Stock', 105, 28, { align: 'center' });
+    doc.text(`Date: ${today}`, 105, 34, { align: 'center' });
+
+    doc.setDrawColor(37, 99, 235);
+    doc.setLineWidth(0.5);
+    doc.line(15, 38, 195, 38);
+
+    // Summary Section
+    let y = 45;
+    doc.setFontSize(13);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Inventory Summary', 15, y);
+    y += 8;
+
+    let totalSellValue = 0, totalCostValue = 0, lowCount = 0;
+    (D.products || []).forEach(p => {
+        totalSellValue += (p.sell || 0) * (p.qty || 0);
+        totalCostValue += (p.cost || 0) * (p.qty || 0);
+        if ((p.qty || 0) <= (p.threshold || LOW_STOCK_DEFAULT)) lowCount++;
+    });
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Total Products: ${(D.products || []).length}`, 15, y);
+    doc.text(`Total Inventory Value (Sell): ${formatNumber(totalSellValue)} DH`, 15, y + 6);
+    doc.text(`Total Inventory Value (Cost): ${formatNumber(totalCostValue)} DH`, 15, y + 12);
+    doc.text(`Low Stock Items: ${lowCount}`, 15, y + 18);
+    y += 28;
+
+    // Products Table
+    doc.setFontSize(13);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Products Detail', 15, y);
+    y += 4;
+
+    const tableData = (D.products || []).map(p => [
+        p.name || '-',
+        formatNumber(p.cost || 0),
+        formatNumber(p.sell || 0),
+        formatNumber(p.qty || 0, 0),
+        formatNumber((p.sell || 0) * (p.qty || 0)),
+        (p.qty || 0) <= (p.threshold || LOW_STOCK_DEFAULT) ? 'LOW' : 'OK'
+    ]);
+
+    doc.autoTable({
+        startY: y,
+        head: [['Product', 'Cost', 'Sell Price', 'Qty', 'Total Value', 'Status']],
+        body: tableData,
+        theme: 'grid',
+        headStyles: {
+            fillColor: [37, 99, 235],
+            textColor: 255,
+            fontStyle: 'bold',
+            halign: 'center'
+        },
+        bodyStyles: { halign: 'center', fontSize: 9 },
+        columnStyles: {
+            0: { halign: 'left' },
+            5: { fontStyle: 'bold' }
+        },
+        didParseCell: function(data) {
+            if (data.column.index === 5 && data.section === 'body') {
+                if (data.cell.raw === 'LOW') {
+                    data.cell.styles.textColor = [220, 38, 38];
+                    data.cell.styles.fontStyle = 'bold';
+                } else {
+                    data.cell.styles.textColor = [5, 150, 105];
+                }
+            }
+        }
+    });
+
+    // Stock Movements Section
+    y = doc.lastAutoTable.finalY + 12;
+    if (y > 250) { doc.addPage(); y = 20; }
+
+    doc.setFontSize(13);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Recent Stock Sales', 15, y);
+    y += 4;
+
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    const monthSales = (D.stock_sales || []).filter(s => (s.date || '').startsWith(currentMonth));
+
+    if (monthSales.length > 0) {
+        const salesData = monthSales.map(s => [
+            s.product_name || '-',
+            formatNumber(s.qty || 0, 0),
+            formatNumber(s.sell_price || 0),
+            formatNumber(s.total || 0),
+            formatNumber(s.profit || 0),
+            s.date || '-'
+        ]);
+
+        doc.autoTable({
+            startY: y,
+            head: [['Product', 'Qty', 'Unit Price', 'Total', 'Profit', 'Date']],
+            body: salesData,
+            theme: 'grid',
+            headStyles: {
+                fillColor: [16, 185, 129],
+                textColor: 255,
+                fontStyle: 'bold',
+                halign: 'center'
+            },
+            bodyStyles: { halign: 'center', fontSize: 9 },
+            columnStyles: { 0: { halign: 'left' } }
+        });
+
+        y = doc.lastAutoTable.finalY + 8;
+        let totalSalesRevenue = 0, totalSalesProfit = 0;
+        monthSales.forEach(s => {
+            totalSalesRevenue += s.total || 0;
+            totalSalesProfit += s.profit || 0;
+        });
+
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`Monthly Sales Revenue: ${formatNumber(totalSalesRevenue)} DH`, 15, y);
+        doc.text(`Monthly Stock Profit: ${formatNumber(totalSalesProfit)} DH`, 15, y + 6);
+    } else {
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.text('No stock sales recorded this month.', 15, y + 4);
+    }
+
+    // Footer
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(150);
+        doc.text(`Generated by Rkham System - ${today}`, 105, 290, { align: 'center' });
+        doc.text(`Page ${i} / ${pageCount}`, 195, 290, { align: 'right' });
+    }
+
+    doc.save(`stock_report_${new Date().toISOString().split('T')[0]}.pdf`);
+}
+
 // ============ INIT ============
 document.addEventListener('DOMContentLoaded', () => {
-    showApp();
-    
+    // Attach decimal-safe sanitizers to all static numeric inputs
+    // (Journal modal, Masarif modal, Staff modal, Payment modals)
+    const staticNumericIds = [
+        'entry-meters', 'entry-price',
+        'masarif-amount',
+        'staff-amount',
+        'payment-amount',
+        'fourn-payment-amount',
+        'product-cost', 'product-sell', 'product-qty', 'product-threshold',
+        'stock-sale-qty'
+    ];
+    staticNumericIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            // Convert type="number" to text+inputmode so paste works properly
+            el.type = 'text';
+            el.setAttribute('inputmode', 'decimal');
+            el.setAttribute('data-numeric', '');
+            attachNumericSanitizer(el);
+        }
+    });
+
+    // Also attach sanitizers to any data-numeric inputs already in the DOM
+    // (e.g., the static BL product row rendered in index.html)
+    document.querySelectorAll('input[data-numeric]').forEach(attachNumericSanitizer);
+
     // Auto-calculate in journal modal
     const metersInput = document.getElementById('entry-meters');
     const priceInput = document.getElementById('entry-price');
